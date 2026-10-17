@@ -1,0 +1,28 @@
+{
+  "name": "twenty-crm-replica",
+  "private": true,
+  "description": "A customizable, metadata-driven CRM. Inspired by Twenty; independent implementation.",
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "postinstall": "pnpm --filter @crm-replica/shared build",
+    "dev": "pnpm --filter \"@crm-replica/worker...\" build && pnpm --parallel --filter \"./apps/*\" --filter @crm-replica/shared dev",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "typecheck": "pnpm --filter \"@crm-replica/worker^...\" build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2"
+  }
+}

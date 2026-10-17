@@ -1,0 +1,63 @@
+# Local development:   docker compose up -d          -> Postgres + Redis only (run apps with `pnpm dev`)
+# Full stack in Docker: docker compose --profile full up --build
+#                       -> also builds and runs the API (serving the web app) and the worker.
+name: crm-replica
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+      POSTGRES_DB: crm
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U crm -d crm']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # The API also serves the built React app at / (one URL, no CORS), as in production.
+  server:
+    profiles: [full]
+    build: .
+    command: ['node', 'apps/server/dist/main.js']
+    environment: &app-env
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://crm:crm@postgres:5432/crm
+      REDIS_URL: redis://redis:6379
+      APP_URL: http://localhost:3000
+    ports:
+      - '3000:3000'
+    depends_on: &app-deps
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    profiles: [full]
+    build: .
+    command: ['node', 'apps/worker/dist/main.js']
+    environment: *app-env
+    depends_on: *app-deps
+
+volumes:
+  postgres-data:
+  redis-data:

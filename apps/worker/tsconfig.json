@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "types": ["node", "jest"],
+    // Types come from the server's build output (runtime uses its package "exports").
+    "paths": { "@crm-replica/server/*": ["../server/dist/*"] }
+  },
+  "include": ["src"]
+}
