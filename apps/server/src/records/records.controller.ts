@@ -83,6 +83,23 @@ export class RecordsController {
     return this.records.update(ctxOf(auth), plural, id, body);
   }
 
+  @Post(':plural/batch-delete')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Delete several records (soft delete)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { ids: { type: 'array', items: { type: 'string', format: 'uuid' } } },
+    },
+  })
+  removeMany(
+    @Auth() auth: AuthContext,
+    @Param('plural') plural: string,
+    @Body() body: unknown,
+  ): Promise<{ deletedIds: string[] }> {
+    return this.records.removeMany(ctxOf(auth), plural, body);
+  }
+
   @Delete(':plural/:id')
   @ApiOperation({ summary: 'Delete a record (soft delete; can be restored)' })
   remove(

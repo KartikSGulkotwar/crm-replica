@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 4 of 12 (records API). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 5 of 12 (table UI). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -25,6 +25,11 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   multi-field sort, cursor pagination, `?expand=` for relations in both directions,
   `record.created/updated/deleted/restored` events, and `/api/docs` generated live from your
   workspace's data model.
+- **Phase 5:** the CRM screens. The sidebar lists your objects; each object has a spreadsheet-style
+  table with in-place editing for every field type (select chips, stars, currency, dates,
+  linked-record picker), resizable and reorderable columns, infinite scroll, row selection
+  with bulk delete, and a "New record" dialog. Record pages show every field plus linked
+  records from both directions.
 
 ## What's in the repo
 

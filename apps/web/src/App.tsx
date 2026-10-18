@@ -6,6 +6,8 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ObjectPage } from './pages/objects/ObjectPage';
+import { RecordPage } from './pages/objects/RecordPage';
 import { GeneralSettingsPage } from './pages/settings/GeneralSettingsPage';
 import { MembersSettingsPage } from './pages/settings/MembersSettingsPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
@@ -22,6 +24,8 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />
+          <Route path="objects/:plural" element={<ObjectPage />} />
+          <Route path="objects/:plural/:id" element={<RecordPage />} />
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />

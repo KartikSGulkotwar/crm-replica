@@ -38,6 +38,7 @@ export interface ListQuery {
 }
 
 const MAX_EXPANDS = 5;
+const MAX_BATCH = 200;
 /** Records returned per parent for one-to-many expansions (e.g. a company's people). */
 const INVERSE_EXPAND_LIMIT = 50;
 
@@ -196,6 +197,34 @@ export class RecordsService {
   /** Soft delete: the record disappears from lists but stays in the table and can be restored. */
   async remove(ctx: RecordContext, plural: string, id: string): Promise<RecordDto> {
     return this.setDeleted(ctx, plural, id, true);
+  }
+
+  /** Soft-deletes several records at once (e.g. "Delete selected" in the table). */
+  async removeMany(
+    ctx: RecordContext,
+    plural: string,
+    body: unknown,
+  ): Promise<{ deletedIds: string[] }> {
+    const { model, object } = await this.models.object(ctx.workspace, plural);
+    assertWritable(object);
+    const ids = (body as { ids?: unknown } | null)?.ids;
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0 ||
+      ids.length > MAX_BATCH ||
+      !ids.every((id) => typeof id === 'string' && UUID.test(id))
+    ) {
+      throw new BadRequestException(`ids must be a list of 1 to ${MAX_BATCH} record ids`);
+    }
+    const rows = await queryRows(
+      this.dataSource.manager,
+      `UPDATE ${qualified(model.schema, object.tableName)} SET "deleted_at" = now(), "updated_at" = now()
+       WHERE "id" = ANY($1::uuid[]) AND "deleted_at" IS NULL RETURNING *`,
+      [ids],
+    );
+    for (const row of rows)
+      await this.emit(RECORD_EVENTS.DELETED, ctx, object, rowToRecord(object, row));
+    return { deletedIds: rows.map((r) => r.id as string) };
   }
 
   async restore(ctx: RecordContext, plural: string, id: string): Promise<RecordDto> {

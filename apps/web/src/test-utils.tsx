@@ -4,6 +4,7 @@ import { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import { ThemeProvider } from './lib/theme';
+import { ToastProvider } from './lib/toast';
 
 type Handler = (init: RequestInit | undefined) => { status?: number; body?: unknown };
 
@@ -29,7 +30,9 @@ export function renderApp(ui: ReactElement, { route = '/' } = {}) {
   return render(
     <QueryClientProvider client={client}>
       <ThemeProvider>
-        <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>,
   );

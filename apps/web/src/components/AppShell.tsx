@@ -1,17 +1,38 @@
-import { useState } from 'react';
+import { Home, Settings, Workflow } from 'lucide-react';
+import { ReactNode, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useObjects } from '../lib/metadata';
 import { useLogout, useSession } from '../lib/session';
+import { ObjectIcon } from './ObjectIcon';
 import { ThemeToggle } from './ThemeToggle';
 
-/** Placeholder navigation; Phase 5 replaces this with objects loaded from the data model. */
-const NAV = [
-  { to: '/', label: 'Home' },
-  { to: '/objects/companies', label: 'Companies', soon: true },
-  { to: '/objects/people', label: 'People', soon: true },
-  { to: '/objects/opportunities', label: 'Opportunities', soon: true },
-  { to: '/workflows', label: 'Workflows', soon: true },
-  { to: '/settings', label: 'Settings' },
-];
+function NavItem({
+  to,
+  label,
+  icon,
+  end,
+  onNavigate,
+}: {
+  to: string;
+  label: string;
+  icon: ReactNode;
+  end?: boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        `flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${isActive ? 'bg-accent-soft font-medium text-accent' : 'hover:bg-raised'}`
+      }
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </NavLink>
+  );
+}
 
 function Brand() {
   const workspace = useSession().data?.workspace;
@@ -51,38 +72,55 @@ function UserMenu() {
 
 export function AppShell() {
   const [open, setOpen] = useState(false);
+  const objects = useObjects();
+  const close = () => setOpen(false);
 
   const sidebar = (
-    <nav className="flex h-full flex-col gap-1 p-3" aria-label="Main">
+    <nav className="flex h-full flex-col gap-0.5 overflow-y-auto p-3" aria-label="Main">
       <div className="mb-4 hidden px-2 pt-1 md:block">
         <Brand />
       </div>
-      {NAV.map((item) =>
-        item.soon ? (
-          <span
-            key={item.to}
-            className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-muted/70"
-            title="Coming in a later phase"
-          >
-            {item.label}
-            <span className="rounded bg-raised px-1.5 text-[10px] uppercase tracking-wide">
-              soon
-            </span>
+      <NavItem
+        to="/"
+        end
+        label="Home"
+        icon={<Home aria-hidden className="size-4" />}
+        onNavigate={close}
+      />
+      <div className="mt-3 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+        Objects
+      </div>
+      {objects.isPending && <div className="px-2 py-1.5 text-sm text-muted">Loading…</div>}
+      {objects.isError && <div className="px-2 py-1.5 text-sm text-bad">Couldn’t load objects</div>}
+      {objects.data
+        ?.filter((o) => !o.isSystem)
+        .map((o) => (
+          <NavItem
+            key={o.id}
+            to={`/objects/${o.namePlural}`}
+            label={o.labelPlural}
+            icon={<ObjectIcon name={o.icon} />}
+            onNavigate={close}
+          />
+        ))}
+      <div className="mt-3 space-y-1">
+        <span
+          className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-muted/70"
+          title="Coming in a later phase"
+        >
+          <span className="flex items-center gap-2">
+            <Workflow aria-hidden className="size-4" />
+            Workflows
           </span>
-        ) : (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            onClick={() => setOpen(false)}
-            className={({ isActive }) =>
-              `rounded-lg px-2 py-1.5 text-sm ${isActive ? 'bg-accent-soft font-medium text-accent' : 'hover:bg-raised'}`
-            }
-          >
-            {item.label}
-          </NavLink>
-        ),
-      )}
+          <span className="rounded bg-raised px-1.5 text-[10px] uppercase tracking-wide">soon</span>
+        </span>
+        <NavItem
+          to="/settings"
+          label="Settings"
+          icon={<Settings aria-hidden className="size-4" />}
+          onNavigate={close}
+        />
+      </div>
       <div className="mt-auto space-y-2 border-t border-line px-1 pt-3">
         <UserMenu />
         <ThemeToggle />
@@ -113,7 +151,7 @@ export function AppShell() {
       <aside className="hidden w-60 shrink-0 border-r border-line bg-surface md:block">
         {sidebar}
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>

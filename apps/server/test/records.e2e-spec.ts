@@ -124,6 +124,23 @@ describe('Records API (e2e)', () => {
       await admin.delete(`/api/objects/companies/${temp.id}`).expect(404); // already deleted
     });
 
+    it('deletes several records at once, skipping ones already deleted', async () => {
+      const a = await create('companies', { name: 'Batch A' });
+      const b = await create('companies', { name: 'Batch B' });
+      await admin.delete(`/api/objects/companies/${b.id}`).expect(200);
+      const res = await admin
+        .post('/api/objects/companies/batch-delete')
+        .send({ ids: [a.id, b.id] })
+        .expect(200);
+      expect(res.body.deletedIds).toEqual([a.id]);
+      await admin.get(`/api/objects/companies/${a.id}`).expect(404);
+      await admin.post('/api/objects/companies/batch-delete').send({ ids: [] }).expect(400);
+      await admin
+        .post('/api/objects/companies/batch-delete')
+        .send({ ids: ["x' OR 1=1 --"] })
+        .expect(400);
+    });
+
     it('returns 404 for unknown objects and ids', async () => {
       await admin.get('/api/objects/unicorns').expect(404);
       await admin.get('/api/objects/company').expect(404); // plural only
