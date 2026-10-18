@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuthedRequest, IS_PUBLIC } from './auth.decorators';
+import { AuthedRequest, IS_OPTIONAL_AUTH, IS_PUBLIC } from './auth.decorators';
 import { SESSION_COOKIE } from './session-cookie';
 import { UserEntity } from './user.entity';
 
@@ -30,8 +30,21 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
     if (isPublic) return true;
+    const isOptional = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL_AUTH, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     const req = context.switchToHttp().getRequest<AuthedRequest>();
+    if (!isOptional) return this.authenticate(req);
+    try {
+      return await this.authenticate(req);
+    } catch {
+      return true;
+    }
+  }
+
+  private async authenticate(req: AuthedRequest): Promise<boolean> {
     const token: unknown = req.cookies?.[SESSION_COOKIE];
     if (typeof token !== 'string' || !token) throw new UnauthorizedException('Please log in');
 

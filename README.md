@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 3 of 12 (data model & schema sync). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 4 of 12 (records API). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -20,6 +20,11 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   workspaces get Company, Person, Opportunity, Note and Task. Metadata API at `/api/metadata`
   (objects, fields, soft delete → restore → permanent delete, `/api/metadata/export`). All 13
   field types; relations get a foreign key and show up in reverse on the target object.
+- **Phase 4:** records API for every object at `/api/objects/{plural}` (list, get, create, update,
+  soft delete, restore). JSON filter trees (`and` / `or` / `not`, operators per field type),
+  multi-field sort, cursor pagination, `?expand=` for relations in both directions,
+  `record.created/updated/deleted/restored` events, and `/api/docs` generated live from your
+  workspace's data model.
 
 ## What's in the repo
 

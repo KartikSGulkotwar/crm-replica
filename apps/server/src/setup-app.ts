@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { setBaseOpenApiDocument } from './records/openapi.controller';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 /** Shared by main.ts and the e2e tests so both run the exact same app configuration. */
@@ -20,5 +21,10 @@ export function setupApp(app: INestApplication) {
     .setVersion('0.1.0')
     .addCookieAuth('crm_session')
     .build();
-  SwaggerModule.setup('api/docs', app, () => SwaggerModule.createDocument(app, config));
+  const document = SwaggerModule.createDocument(app, config);
+  setBaseOpenApiDocument(document);
+  // The docs page loads /api/openapi.json, which adds your workspace's objects when logged in.
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: { url: '/api/openapi.json', persistAuthorization: true },
+  });
 }

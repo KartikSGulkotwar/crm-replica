@@ -16,6 +16,10 @@ export const IS_PUBLIC = 'auth:isPublic';
 /** Opt a route (or controller) out of authentication. Everything else requires a session. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
+export const IS_OPTIONAL_AUTH = 'auth:isOptional';
+/** Authenticate if a valid session is present, but let anonymous requests through too. */
+export const OptionalAuth = () => SetMetadata(IS_OPTIONAL_AUTH, true);
+
 export const ROLES = 'auth:roles';
 /** Restrict a route to the given workspace roles, e.g. `@Roles(WorkspaceRole.ADMIN)`. */
 export const Roles = (...roles: WorkspaceRole[]) => SetMetadata(ROLES, roles);

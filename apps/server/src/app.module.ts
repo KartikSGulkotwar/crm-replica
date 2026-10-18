@@ -1,5 +1,7 @@
+import './database/pg-types';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { existsSync } from 'node:fs';
@@ -8,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { loadEnv } from './config/env';
 import { MIGRATIONS } from './database/migrations';
 import { HealthModule } from './health/health.module';
+import { RecordsModule } from './records/records.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 
@@ -38,6 +41,8 @@ const staticModules = existsSync(webDist)
     RedisModule,
     HealthModule,
     AuthModule,
+    EventEmitterModule.forRoot(),
+    RecordsModule,
     ...staticModules,
   ],
 })
