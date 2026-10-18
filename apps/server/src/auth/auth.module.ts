@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { loadEnv } from '../config/env';
+import { MetadataModule } from '../metadata/metadata.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -22,6 +23,7 @@ import { UserEntity } from './user.entity';
     // Applied only to signup / login / accept-invite (see ThrottlerGuard in AuthController).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: loadEnv().AUTH_RATE_LIMIT }]),
     WorkspaceModule,
+    MetadataModule,
   ],
   controllers: [AuthController],
   providers: [

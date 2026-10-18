@@ -10,6 +10,8 @@ import { SessionResponse, WorkspaceRole } from '@crm-replica/shared';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager, QueryFailedError, Repository } from 'typeorm';
 import { workspaceSchemaName } from '../database/workspace-schema';
+import { StandardObjectsService } from '../metadata/standard-objects.service';
+import { WorkspaceMembersService } from '../metadata/workspace-members.service';
 import { newInviteToken } from '../workspace/invite-token';
 import { WorkspaceEntity } from '../workspace/workspace.entity';
 import { WorkspaceService } from '../workspace/workspace.service';
@@ -31,10 +33,15 @@ export class AuthService {
     private readonly dataSource: DataSource,
     private readonly jwt: JwtService,
     private readonly workspaces: WorkspaceService,
+    private readonly standardObjects: StandardObjectsService,
+    private readonly members: WorkspaceMembersService,
     @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
   ) {}
 
-  /** Creates a workspace, its Postgres schema and its first (admin) user, all in one transaction. */
+  /**
+   * Creates a workspace, its Postgres schema with the standard objects, and its first (admin)
+   * user, all in one transaction.
+   */
   async signup(dto: SignupDto): Promise<IssuedSession> {
     await this.assertEmailFree(dto.email);
     const { user, workspace } = await this.dataSource.transaction(async (em) => {
@@ -49,6 +56,7 @@ export class AuthService {
       );
       // The name is generated and validated by workspaceSchemaName, never taken from input.
       await em.query(`CREATE SCHEMA "${workspace.schemaName}"`);
+      await this.standardObjects.seed(em, workspace);
       const user = await this.createUser(em, workspace, dto, WorkspaceRole.ADMIN);
       return { user, workspace };
     });
@@ -91,8 +99,9 @@ export class AuthService {
     dto: NewAccountDto,
     role: WorkspaceRole,
   ): Promise<UserEntity> {
+    let user: UserEntity;
     try {
-      return await em.save(
+      user = await em.save(
         em.create(UserEntity, {
           workspaceId: workspace.id,
           email: dto.email,
@@ -111,6 +120,8 @@ export class AuthService {
       }
       throw error;
     }
+    await this.members.upsert(em, workspace, user);
+    return user;
   }
 
   private async assertEmailFree(email: string) {

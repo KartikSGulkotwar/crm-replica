@@ -4,6 +4,7 @@ import { InviteLinkResponse, MemberDto, WorkspaceRole } from '@crm-replica/share
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { UserEntity } from '../auth/user.entity';
 import { loadEnv } from '../config/env';
+import { WorkspaceMembersService } from '../metadata/workspace-members.service';
 import { isWellFormedInviteToken, newInviteToken } from './invite-token';
 import { WorkspaceEntity } from './workspace.entity';
 
@@ -13,6 +14,7 @@ const LAST_ADMIN = 'A workspace needs at least one admin';
 export class WorkspaceService {
   constructor(
     private readonly dataSource: DataSource,
+    private readonly memberRecords: WorkspaceMembersService,
     @InjectRepository(WorkspaceEntity) private readonly workspaces: Repository<WorkspaceEntity>,
     @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
   ) {}
@@ -55,13 +57,15 @@ export class WorkspaceService {
     });
   }
 
-  async removeMember(workspaceId: string, actorId: string, memberId: string): Promise<void> {
+  async removeMember(workspace: WorkspaceEntity, actorId: string, memberId: string): Promise<void> {
     if (memberId === actorId) throw new BadRequestException('You can’t remove yourself');
+    const workspaceId = workspace.id;
     await this.dataSource.transaction(async (em) => {
       const member = await this.findMember(em, workspaceId, memberId);
       if (member.role === WorkspaceRole.ADMIN)
         await this.assertAnotherAdmin(em, workspaceId, member.id);
       await em.remove(member);
+      await this.memberRecords.remove(em, workspace, memberId);
     });
   }
 

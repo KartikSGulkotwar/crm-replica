@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 2 of 12 (auth & workspaces). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 3 of 12 (data model & schema sync). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -15,6 +15,11 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   makes you admin), log in / log out with an httpOnly JWT cookie, admin and member roles, one
   invite link per workspace (admins can reset it), Settings → General and Members, rate-limited
   auth endpoints.
+- **Phase 3:** objects and fields are data (`core.object_metadata`, `core.field_metadata`), and
+  schema-sync turns them into real Postgres tables and columns in each workspace's schema. New
+  workspaces get Company, Person, Opportunity, Note and Task. Metadata API at `/api/metadata`
+  (objects, fields, soft delete → restore → permanent delete, `/api/metadata/export`). All 13
+  field types; relations get a foreign key and show up in reverse on the target object.
 
 ## What's in the repo
 

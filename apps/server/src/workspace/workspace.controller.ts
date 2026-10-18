@@ -60,7 +60,7 @@ export class WorkspaceController {
     @Auth() { workspace, user }: AuthContext,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.workspaces.removeMember(workspace.id, user.id, id);
+    await this.workspaces.removeMember(workspace, user.id, id);
   }
 
   @Get('invite-link')
