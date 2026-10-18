@@ -4,7 +4,9 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { AuthModule } from './auth/auth.module';
 import { loadEnv } from './config/env';
+import { MIGRATIONS } from './database/migrations';
 import { HealthModule } from './health/health.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
@@ -23,8 +25,10 @@ const staticModules = existsSync(webDist)
       type: 'postgres',
       url: env.DATABASE_URL,
       autoLoadEntities: true,
-      // Schema changes go through migrations, never auto-sync.
+      // Metadata tables change only through migrations, applied when the API starts.
       synchronize: false,
+      migrations: MIGRATIONS,
+      migrationsRun: true,
       retryAttempts: env.NODE_ENV === 'test' ? 1 : 10,
     }),
     BullModule.forRoot({
@@ -33,6 +37,7 @@ const staticModules = existsSync(webDist)
     }),
     RedisModule,
     HealthModule,
+    AuthModule,
     ...staticModules,
   ],
 })

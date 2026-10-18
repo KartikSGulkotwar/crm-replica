@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useLogout, useSession } from '../lib/session';
 import { ThemeToggle } from './ThemeToggle';
 
 /** Placeholder navigation; Phase 5 replaces this with objects loaded from the data model. */
@@ -9,16 +10,41 @@ const NAV = [
   { to: '/objects/people', label: 'People', soon: true },
   { to: '/objects/opportunities', label: 'Opportunities', soon: true },
   { to: '/workflows', label: 'Workflows', soon: true },
-  { to: '/settings', label: 'Settings', soon: true },
+  { to: '/settings', label: 'Settings' },
 ];
 
 function Brand() {
+  const workspace = useSession().data?.workspace;
   return (
-    <div className="flex items-center gap-2 font-semibold tracking-tight">
-      <span className="grid size-7 place-items-center rounded-lg bg-accent text-sm text-white">
-        C
+    <div className="flex min-w-0 items-center gap-2 font-semibold tracking-tight">
+      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-sm text-white">
+        {(workspace?.name ?? 'C').slice(0, 1).toUpperCase()}
       </span>
-      CRM Replica
+      <span className="truncate">{workspace?.name ?? 'CRM Replica'}</span>
+    </div>
+  );
+}
+
+function UserMenu() {
+  const user = useSession().data?.user;
+  const logout = useLogout();
+  const navigate = useNavigate();
+  if (!user) return null;
+  return (
+    <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{user.name}</div>
+        <div className="truncate text-xs text-muted">
+          {user.email} · <span className="capitalize">{user.role}</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => logout.mutate(undefined, { onSuccess: () => navigate('/login') })}
+        className="shrink-0 rounded-md px-2 py-1 text-xs text-muted hover:bg-raised hover:text-ink"
+      >
+        Log out
+      </button>
     </div>
   );
 }
@@ -47,7 +73,7 @@ export function AppShell() {
           <NavLink
             key={item.to}
             to={item.to}
-            end
+            end={item.to === '/'}
             onClick={() => setOpen(false)}
             className={({ isActive }) =>
               `rounded-lg px-2 py-1.5 text-sm ${isActive ? 'bg-accent-soft font-medium text-accent' : 'hover:bg-raised'}`
@@ -57,7 +83,8 @@ export function AppShell() {
           </NavLink>
         ),
       )}
-      <div className="mt-auto px-1">
+      <div className="mt-auto space-y-2 border-t border-line px-1 pt-3">
+        <UserMenu />
         <ThemeToggle />
       </div>
     </nav>

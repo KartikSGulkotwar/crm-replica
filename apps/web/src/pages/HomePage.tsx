@@ -1,6 +1,7 @@
 import type { ComponentStatus, HealthResponse } from '@crm-replica/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useSession } from '../lib/session';
 
 const COMPONENTS: { key: keyof HealthResponse['checks']; label: string; hint: string }[] = [
   { key: 'database', label: 'Database', hint: 'PostgreSQL: stores metadata and records' },
@@ -37,6 +38,7 @@ function StatusRow({
 }
 
 export function HomePage() {
+  const name = useSession().data?.user.name;
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api<HealthResponse>('/health'),
@@ -52,7 +54,9 @@ export function HomePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 md:py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        Welcome{name ? `, ${name.split(' ')[0]}` : ''}
+      </h1>
       <p className="mt-1 text-sm text-muted">
         A customizable CRM: objects, views, workflows and an AI agent. The pieces arrive phase by
         phase; this page confirms the foundation is running.

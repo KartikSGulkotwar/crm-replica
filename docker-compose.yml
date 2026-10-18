@@ -43,6 +43,8 @@ services:
       DATABASE_URL: postgres://crm:crm@postgres:5432/crm
       REDIS_URL: redis://redis:6379
       APP_URL: http://localhost:3000
+      # Local Docker only. Real deployments must set their own secret (see .env.example).
+      JWT_SECRET: ${JWT_SECRET:-local-docker-compose-secret-not-for-production}
     ports:
       - '3000:3000'
     depends_on: &app-deps

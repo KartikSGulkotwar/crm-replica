@@ -10,9 +10,16 @@ const envSchema = z.object({
   /** Namespace for BullMQ keys in Redis; tests use a unique one to stay isolated. */
   BULLMQ_PREFIX: z.string().min(1).default('crm'),
   APP_URL: z.string().url().default('http://localhost:5173'),
+  JWT_SECRET: z.string().optional(),
+  /** Sign-up / login / accept-invite attempts allowed per IP per minute. */
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });
 
-export type Env = z.infer<typeof envSchema>;
+const DEV_JWT_SECRET = 'dev-only-insecure-jwt-secret-change-me';
+/** The value shipped in .env.example; never acceptable in production. */
+const EXAMPLE_JWT_SECRET = 'change-me-to-a-long-random-string';
+
+export type Env = Omit<z.infer<typeof envSchema>, 'JWT_SECRET'> & { JWT_SECRET: string };
 
 /** Walks up from the working directory to find the repo-root `.env`, so every app shares one file. */
 function findEnvFile(start = process.cwd()): string | undefined {
@@ -37,6 +44,16 @@ export function loadEnv(): Env {
   if (!parsed.success) {
     throw new Error(`Invalid environment variables:\n${z.prettifyError(parsed.error)}`);
   }
-  cached = parsed.data;
+  const data = parsed.data;
+  const secret = data.JWT_SECRET;
+  if (
+    data.NODE_ENV === 'production' &&
+    (!secret || secret.length < 32 || secret === EXAMPLE_JWT_SECRET)
+  ) {
+    throw new Error(
+      'JWT_SECRET must be set to a random value of at least 32 characters in production.',
+    );
+  }
+  cached = { ...data, JWT_SECRET: data.JWT_SECRET || DEV_JWT_SECRET };
   return cached;
 }

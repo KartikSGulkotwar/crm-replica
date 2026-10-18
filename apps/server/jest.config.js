@@ -18,6 +18,7 @@ module.exports = {
       roots: ['<rootDir>/test'],
       testRegex: '\\.e2e-spec\\.ts$',
       setupFiles: ['<rootDir>/test/setup-env.ts'],
+      globalSetup: '<rootDir>/test/global-setup.ts',
     },
   ],
 };
