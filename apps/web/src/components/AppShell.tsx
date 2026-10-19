@@ -1,8 +1,9 @@
 import { Home, Settings, Workflow } from 'lucide-react';
 import { ReactNode, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useObjects } from '../lib/metadata';
 import { useLogout, useSession } from '../lib/session';
+import { ErrorBoundary } from './ErrorBoundary';
 import { ObjectIcon } from './ObjectIcon';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -73,6 +74,7 @@ function UserMenu() {
 export function AppShell() {
   const [open, setOpen] = useState(false);
   const objects = useObjects();
+  const location = useLocation();
   const close = () => setOpen(false);
 
   const sidebar = (
@@ -152,7 +154,9 @@ export function AppShell() {
         {sidebar}
       </aside>
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

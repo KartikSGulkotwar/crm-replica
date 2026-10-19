@@ -11,6 +11,7 @@ import { loadEnv } from './config/env';
 import { MIGRATIONS } from './database/migrations';
 import { HealthModule } from './health/health.module';
 import { RecordsModule } from './records/records.module';
+import { ViewsModule } from './views/views.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 
@@ -43,6 +44,7 @@ const staticModules = existsSync(webDist)
     AuthModule,
     EventEmitterModule.forRoot(),
     RecordsModule,
+    ViewsModule,
     ...staticModules,
   ],
 })

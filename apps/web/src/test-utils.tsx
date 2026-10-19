@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { ThemeProvider } from './lib/theme';
 import { ToastProvider } from './lib/toast';
 
-type Handler = (init: RequestInit | undefined) => { status?: number; body?: unknown };
+type Handler = (init: RequestInit | undefined, url: URL) => { status?: number; body?: unknown };
 
 /**
  * Replaces fetch with canned responses keyed by "METHOD /path" (path without the /api prefix).
@@ -18,7 +18,7 @@ export function mockApi(routes: Record<string, Handler | { status?: number; body
     const key = `${init?.method ?? 'GET'} ${url.pathname.replace(/^\/api/, '')}`;
     const route = routes[key];
     if (!route) throw new Error(`Unexpected request: ${key}`);
-    const { status = 200, body } = typeof route === 'function' ? route(init) : route;
+    const { status = 200, body } = typeof route === 'function' ? route(init, url) : route;
     return new Response(body === undefined ? null : JSON.stringify(body), { status });
   });
   vi.stubGlobal('fetch', fetchMock);

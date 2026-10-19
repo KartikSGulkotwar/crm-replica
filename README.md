@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 5 of 12 (table UI). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 6 of 12 (views). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -30,6 +30,11 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   linked-record picker), resizable and reorderable columns, infinite scroll, row selection
   with bulk delete, and a "New record" dialog. Record pages show every field plus linked
   records from both directions.
+- **Phase 6:** saved views (`core.view`, `view_field`, `view_filter`, `view_sort`; API at
+  `/api/views`). Each object has a default view; you can add more. Filter builder (match all/any,
+  operators per field type), sort builder, show/hide and reorder fields, column widths and
+  order saved to the view, and a kanban board grouped by a select field with drag and drop
+  between and within columns.
 
 ## What's in the repo
 

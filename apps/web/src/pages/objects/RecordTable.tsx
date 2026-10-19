@@ -1,4 +1,10 @@
-import type { FieldMetadataDto, ObjectMetadataDto, RecordDto } from '@crm-replica/shared';
+import type {
+  FieldMetadataDto,
+  ObjectMetadataDto,
+  RecordDto,
+  ViewDto,
+  ViewFieldDto,
+} from '@crm-replica/shared';
 import {
   closestCenter,
   DndContext,
@@ -17,7 +23,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   ColumnDef,
-  ColumnOrderState,
   ColumnSizingState,
   flexRender,
   getCoreRowModel,
@@ -30,41 +35,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EditableField } from '../../components/fields/Field';
 import { Button, Spinner } from '../../components/ui';
-import { orderedFields } from '../../lib/metadata';
-import { useToast } from '../../lib/toast';
 import { useDeleteRecords, useUpdateRecord } from '../../lib/records';
+import { useToast } from '../../lib/toast';
 
 const SELECT_COLUMN = '__select';
-
-interface TableLayout {
-  order: ColumnOrderState;
-  sizing: ColumnSizingState;
-}
-
-/** Column order and widths, remembered per object in this browser (saved views arrive in Phase 6). */
-function useTableLayout(plural: string): [TableLayout, (next: Partial<TableLayout>) => void] {
-  const storageKey = `crm:table-layout:${plural}`;
-  const [layout, setLayout] = useState<TableLayout>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-      if (saved && Array.isArray(saved.order) && typeof saved.sizing === 'object') return saved;
-    } catch {
-      // ignore unreadable or blocked storage
-    }
-    return { order: [], sizing: {} };
-  });
-  const update = (next: Partial<TableLayout>) =>
-    setLayout((prev) => {
-      const merged = { ...prev, ...next };
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(merged));
-      } catch {
-        // storage unavailable: the layout still applies for this visit
-      }
-      return merged;
-    });
-  return [layout, update];
-}
 
 function defaultWidth(field: FieldMetadataDto, isTitle: boolean) {
   if (isTitle) return 220;
@@ -72,7 +46,6 @@ function defaultWidth(field: FieldMetadataDto, isTitle: boolean) {
     case 'BOOLEAN':
       return 100;
     case 'RATING':
-      return 140;
     case 'NUMBER':
     case 'DATE':
       return 140;
@@ -141,6 +114,8 @@ function SortableHeader({ header }: { header: Header<RecordDto, unknown> }) {
 export function RecordTable({
   object,
   objects,
+  view,
+  onSaveFields,
   records,
   hasNextPage,
   isFetchingNextPage,
@@ -148,6 +123,9 @@ export function RecordTable({
 }: {
   object: ObjectMetadataDto;
   objects: ObjectMetadataDto[];
+  /** Column order, visibility and widths come from the view; changes are saved back to it. */
+  view: ViewDto;
+  onSaveFields: (fields: ViewFieldDto[]) => void;
   records: RecordDto[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -156,10 +134,28 @@ export function RecordTable({
   const toast = useToast();
   const update = useUpdateRecord(object.namePlural);
   const remove = useDeleteRecords(object.namePlural);
-  const [layout, setLayout] = useTableLayout(object.namePlural);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const fields = useMemo(() => orderedFields(object), [object]);
   const readOnly = object.isSystem;
+  const titleName = object.labelIdentifierFieldName;
+
+  // Visible fields in view order; the record title is always shown.
+  const fields = useMemo(
+    () =>
+      view.fields
+        .filter((vf) => vf.isVisible || vf.fieldName === titleName)
+        .map((vf) => object.fields.find((f) => f.name === vf.fieldName))
+        .filter((f): f is FieldMetadataDto => Boolean(f)),
+    [view.fields, object.fields, titleName],
+  );
+  const viewWidths = useMemo(
+    () =>
+      Object.fromEntries(
+        view.fields.filter((f) => f.width).map((f) => [f.fieldName, f.width!]),
+      ) as ColumnSizingState,
+    [view.fields],
+  );
+  const [sizing, setSizing] = useState<ColumnSizingState>(viewWidths);
+  useEffect(() => setSizing(viewWidths), [viewWidths]);
 
   const columns = useMemo<ColumnDef<RecordDto>[]>(() => {
     const save =
@@ -196,10 +192,10 @@ export function RecordTable({
           />
         ),
       },
-      ...fields.map<ColumnDef<RecordDto>>((field, i) => ({
+      ...fields.map<ColumnDef<RecordDto>>((field) => ({
         id: field.name,
         header: field.label,
-        size: defaultWidth(field, i === 0),
+        size: defaultWidth(field, field.name === titleName),
         minSize: 80,
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-1">
@@ -212,7 +208,7 @@ export function RecordTable({
                 readOnly={readOnly}
               />
             </div>
-            {i === 0 && (
+            {field.name === titleName && (
               <Link
                 to={`/objects/${object.namePlural}/${row.original.id}`}
                 aria-label={`Open ${object.labelSingular.toLowerCase()}`}
@@ -227,12 +223,26 @@ export function RecordTable({
     ];
     // `update`/`toast` are stable enough for cell renderers; recreating columns resets resizing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, objects, object.namePlural, object.labelSingular, readOnly]);
+  }, [fields, objects, object.namePlural, object.labelSingular, titleName, readOnly]);
 
-  // Keep saved order valid when fields are added or removed.
-  const columnIds = [SELECT_COLUMN, ...fields.map((f) => f.name)];
-  const savedOrder = layout.order.filter((id) => columnIds.includes(id));
-  const columnOrder = [...savedOrder, ...columnIds.filter((id) => !savedOrder.includes(id))];
+  const columnOrder = [SELECT_COLUMN, ...fields.map((f) => f.name)];
+
+  /** Writes order/widths back into the view's full field list (hidden fields keep their place at the end). */
+  function saveFields(order: string[], widths: ColumnSizingState) {
+    const visible = order.filter((id) => id !== SELECT_COLUMN);
+    const byName = new Map(view.fields.map((f) => [f.fieldName, f]));
+    const hidden = view.fields.filter((f) => !visible.includes(f.fieldName));
+    onSaveFields(
+      [
+        ...visible.map((name) => byName.get(name)).filter((f): f is ViewFieldDto => Boolean(f)),
+        ...hidden,
+      ].map((f, position) => ({
+        ...f,
+        width: widths[f.fieldName] ? Math.round(widths[f.fieldName]) : f.width,
+        position,
+      })),
+    );
+  }
 
   const table = useReactTable({
     data: records,
@@ -241,11 +251,19 @@ export function RecordTable({
     getCoreRowModel: getCoreRowModel(),
     columnResizeMode: 'onChange',
     enableRowSelection: !readOnly,
-    state: { rowSelection, columnOrder, columnSizing: layout.sizing },
+    state: { rowSelection, columnOrder, columnSizing: sizing },
     onRowSelectionChange: setRowSelection,
-    onColumnSizingChange: (updater) =>
-      setLayout({ sizing: typeof updater === 'function' ? updater(layout.sizing) : updater }),
+    onColumnSizingChange: setSizing,
   });
+
+  // Save a column width once the user lets go of the resize handle.
+  const resizing = table.getState().columnSizingInfo.isResizingColumn;
+  const wasResizing = useRef<string | false>(false);
+  useEffect(() => {
+    if (wasResizing.current && !resizing) saveFields(columnOrder, sizing);
+    wasResizing.current = resizing;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resizing]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -253,13 +271,14 @@ export function RecordTable({
   );
   function onDragEnd(e: DragEndEvent) {
     if (!e.over || e.active.id === e.over.id || e.over.id === SELECT_COLUMN) return;
-    setLayout({
-      order: arrayMove(
+    saveFields(
+      arrayMove(
         columnOrder,
         columnOrder.indexOf(String(e.active.id)),
         columnOrder.indexOf(String(e.over.id)),
       ),
-    });
+      sizing,
+    );
   }
 
   // Infinite scroll: load the next page when the sentinel below the last row becomes visible.
@@ -278,20 +297,15 @@ export function RecordTable({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+  const noun = (n: number) =>
+    n === 1 ? object.labelSingular.toLowerCase() : object.labelPlural.toLowerCase();
   function deleteSelected() {
     const n = selectedIds.length;
-    if (
-      !confirm(
-        `Delete ${n} ${n === 1 ? object.labelSingular.toLowerCase() : object.labelPlural.toLowerCase()}?`,
-      )
-    )
-      return;
+    if (!confirm(`Delete ${n} ${noun(n)}?`)) return;
     remove.mutate(selectedIds, {
       onSuccess: ({ deletedIds }) => {
         setRowSelection({});
-        toast(
-          `Deleted ${deletedIds.length} ${deletedIds.length === 1 ? object.labelSingular.toLowerCase() : object.labelPlural.toLowerCase()}`,
-        );
+        toast(`Deleted ${deletedIds.length} ${noun(deletedIds.length)}`);
       },
       onError: (error) => toast(`Couldn’t delete: ${(error as Error).message}`, 'error'),
     });
@@ -314,7 +328,7 @@ export function RecordTable({
           </div>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="relative min-h-0 flex-1 overflow-auto">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <table
             className="table-fixed border-separate border-spacing-0 text-sm"

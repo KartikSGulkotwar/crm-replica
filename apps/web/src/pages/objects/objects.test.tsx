@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import { adminSession, mockApi, renderApp } from '../../test-utils';
+import { positionBetween } from './KanbanBoard';
 
 const field = (name: string, label: string, type: string, extra: Record<string, unknown> = {}) => ({
   id: `f-${name}`,
@@ -121,12 +122,42 @@ const page = (data: unknown[], hasNextPage = false) => ({
   pageInfo: { hasNextPage, endCursor: hasNextPage ? 'next' : null },
 });
 
+const allObjects = [companyObject, personObject, dealObject, memberObject];
+
+/** The default view the API would create: every field visible, no filters or sorts. */
+function defaultView(object: typeof companyObject, extra: Record<string, unknown> = {}) {
+  return {
+    id: `view-${object.namePlural}`,
+    objectId: object.id,
+    objectName: object.nameSingular,
+    name: `All ${object.labelPlural.toLowerCase()}`,
+    type: 'TABLE',
+    isDefault: true,
+    kanbanFieldName: null,
+    filterConjunction: 'and',
+    position: 0,
+    fields: object.fields.map((f, position) => ({
+      fieldName: f.name,
+      isVisible: true,
+      width: null,
+      position,
+    })),
+    filters: [],
+    sorts: [],
+    ...extra,
+  };
+}
+
 function baseRoutes() {
   return {
     'GET /auth/me': { body: adminSession },
-    'GET /metadata/objects': { body: [companyObject, personObject, dealObject, memberObject] },
+    'GET /metadata/objects': { body: allObjects },
     'GET /health': {
       body: { status: 'ok', checks: { database: 'up', redis: 'up', worker: 'up' } },
+    },
+    'GET /views': (_init: RequestInit | undefined, url: URL) => {
+      const object = allObjects.find((o) => o.namePlural === url.searchParams.get('object'))!;
+      return { body: [defaultView(object)] };
     },
   };
 }
@@ -321,5 +352,188 @@ describe('Objects UI', () => {
       'href',
       '/objects/companies/c2',
     );
+  });
+});
+
+describe('Views UI', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  /** Routes with a PATCH /views handler that records bodies and echoes the updated view. */
+  function withViewPatch(view = defaultView(companyObject)) {
+    const patches: Record<string, unknown>[] = [];
+    const listUrls: string[] = [];
+    let current = view;
+    mockApi({
+      ...baseRoutes(),
+      'GET /views': () => ({ body: [current] }),
+      'GET /objects/companies': (_init, url) => {
+        listUrls.push(url.search);
+        return { body: page([acme, globex]) };
+      },
+      [`PATCH /views/${view.id}`]: (init) => {
+        const body = JSON.parse(String(init?.body));
+        patches.push(body);
+        current = {
+          ...current,
+          ...body,
+          fields: body.fields
+            ? body.fields.map((f: object, position: number) => ({
+                width: null,
+                isVisible: true,
+                ...f,
+                position,
+              }))
+            : current.fields,
+        };
+        return { body: current };
+      },
+    });
+    return { patches, listUrls };
+  }
+
+  it('adds a filter that is saved to the view and applied to the records query', async () => {
+    const { patches, listUrls } = withViewPatch();
+    renderApp(<App />, { route: '/objects/companies' });
+    await userEvent.click(await screen.findByRole('button', { name: /Filter/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }));
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Filter field' }),
+      'employees',
+    );
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Filter operator' }), 'gt');
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Employees value' }), '100{Enter}');
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual({
+        filters: [{ fieldName: 'employees', operator: 'gt', value: 100 }],
+        filterConjunction: 'and',
+      }),
+    );
+    // Half-finished rows are not saved.
+    expect(patches.some((p) => JSON.stringify(p).includes('"name"'))).toBe(false);
+    await waitFor(() =>
+      expect(decodeURIComponent(listUrls.at(-1)!)).toContain(
+        'filter={"field":"employees","op":"gt","value":100}',
+      ),
+    );
+  });
+
+  it('adds a sort', async () => {
+    const { patches, listUrls } = withViewPatch();
+    renderApp(<App />, { route: '/objects/companies' });
+    await userEvent.click(await screen.findByRole('button', { name: /Sort/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add sort' }));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Sort direction' }), 'desc');
+    await waitFor(() =>
+      expect(patches.at(-1)).toEqual({ sorts: [{ fieldName: 'name', direction: 'desc' }] }),
+    );
+    await waitFor(() => expect(decodeURIComponent(listUrls.at(-1)!)).toContain('sort=name:desc'));
+  });
+
+  it('hides a field', async () => {
+    const { patches } = withViewPatch();
+    renderApp(<App />, { route: '/objects/companies' });
+    expect(await screen.findByRole('columnheader', { name: /Employees/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Fields/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Show Employees' }));
+    await waitFor(() =>
+      expect(patches.at(-1)!.fields).toContainEqual({
+        fieldName: 'employees',
+        isVisible: false,
+        width: null,
+      }),
+    );
+    expect(screen.queryByRole('columnheader', { name: /Employees/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show Name' })).toBeDisabled(); // the title stays visible
+  });
+
+  it('creates a new view as a copy of the current one', async () => {
+    const created: Record<string, unknown>[] = [];
+    mockApi({
+      ...baseRoutes(),
+      'GET /objects/companies': { body: page([acme]) },
+      'POST /views': (init) => {
+        const body = JSON.parse(String(init?.body));
+        created.push(body);
+        return {
+          status: 201,
+          body: { ...defaultView(companyObject), id: 'view-2', name: body.name, isDefault: false },
+        };
+      },
+    });
+    renderApp(<App />, { route: '/objects/companies' });
+    await userEvent.click(await screen.findByRole('button', { name: 'View: All companies' }));
+    await userEvent.click(screen.getByRole('button', { name: 'New view' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'View name' }), 'Partners{Enter}');
+    await waitFor(() =>
+      expect(created[0]).toMatchObject({
+        object: 'companies',
+        name: 'Partners',
+        type: 'TABLE',
+        filters: [],
+        sorts: [],
+      }),
+    );
+    expect(await screen.findByRole('button', { name: 'View: Partners' })).toBeInTheDocument();
+  });
+
+  it('shows a kanban board with a column per option', async () => {
+    mockApi({
+      ...baseRoutes(),
+      'GET /views': {
+        body: [defaultView(companyObject, { type: 'KANBAN', kanbanFieldName: 'industry' })],
+      },
+      'GET /objects/companies': {
+        body: page([acme, globex, record('c3', { name: 'Shopify', industry: 'RETAIL' })]),
+      },
+    });
+    renderApp(<App />, { route: '/objects/companies' });
+    const software = await screen.findByRole('region', { name: 'Software' });
+    expect(within(software).getByRole('link', { name: 'Acme' })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Retail' })).getByRole('link', { name: 'Shopify' }),
+    ).toBeInTheDocument();
+    // Globex has no industry, so the "No industry" column appears.
+    expect(
+      within(screen.getByRole('region', { name: 'No industry' })).getByRole('link', {
+        name: 'Globex',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Kanban' })).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+describe('positionBetween', () => {
+  const at = (position: number) => record('x', { position }) as never;
+  it('places a card between, after or before its neighbours', () => {
+    expect(positionBetween(at(1), at(2), 9)).toBe(1.5);
+    expect(positionBetween(at(4), undefined, 9)).toBe(5);
+    expect(positionBetween(undefined, at(4), 9)).toBe(3);
+    expect(positionBetween(undefined, undefined, 9)).toBe(9);
+  });
+});
+
+describe('Switching layouts', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('switches a table view to kanban right away, choosing the first select field to group by', async () => {
+    const patches: unknown[] = [];
+    mockApi({
+      ...baseRoutes(),
+      'GET /objects/companies': { body: page([acme, globex]) },
+      'PATCH /views/view-companies': (init) => {
+        const body = JSON.parse(String(init?.body));
+        patches.push(body);
+        return { body: defaultView(companyObject, body) };
+      },
+    });
+    renderApp(<App />, { route: '/objects/companies' });
+    await screen.findByRole('table');
+    await userEvent.click(screen.getByRole('radio', { name: 'Kanban' }));
+    expect(patches).toEqual([{ type: 'KANBAN', kanbanFieldName: 'industry' }]);
+    expect(await screen.findByRole('region', { name: 'Software' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

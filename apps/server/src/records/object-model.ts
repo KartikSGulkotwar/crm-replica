@@ -7,6 +7,8 @@ import type { ObjectMetadataEntity } from '../metadata/object-metadata.entity';
 export type SystemFieldKind = 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'position';
 
 export interface FieldModel {
+  /** Metadata id (undefined for system fields). */
+  id?: string;
   /** API name, e.g. `company`. */
   name: string;
   /** Key in record JSON: the name, or `<name>Id` for relations (`companyId`). */
@@ -84,6 +86,7 @@ function toFieldModel(field: FieldMetadataEntity, objects: ObjectMetadataEntity[
     ? objects.find((o) => o.id === field.relationTargetObjectId)
     : undefined;
   return {
+    id: field.id,
     name: field.name,
     apiKey: field.type === FieldType.RELATION ? `${field.name}Id` : field.name,
     label: field.label,
