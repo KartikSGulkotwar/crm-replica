@@ -8,6 +8,8 @@ import type { WorkspaceEntity } from '../workspace/workspace.entity';
 export interface AuthContext {
   user: UserEntity;
   workspace: WorkspaceEntity;
+  /** Set when the request authenticated with an API key instead of a session cookie. */
+  viaApiKey?: boolean;
 }
 
 export type AuthedRequest = Request & { auth?: AuthContext };

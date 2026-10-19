@@ -38,6 +38,8 @@ export interface ViewDto {
   /** How filters combine: all must match ('and') or any ('or'). */
   filterConjunction: 'and' | 'or';
   position: number;
+  /** App (objects-as-code) that manages this view, or null if created in the UI. */
+  managedByApp: string | null;
   fields: ViewFieldDto[];
   filters: ViewFilterDto[];
   sorts: ViewSortDto[];

@@ -8,6 +8,7 @@ import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ObjectPage } from './pages/objects/ObjectPage';
 import { RecordPage } from './pages/objects/RecordPage';
+import { ApiKeysPage } from './pages/settings/ApiKeysPage';
 import { DataModelPage } from './pages/settings/data-model/DataModelPage';
 import { ObjectSettingsPage } from './pages/settings/data-model/ObjectSettingsPage';
 import { GeneralSettingsPage } from './pages/settings/GeneralSettingsPage';
@@ -34,6 +35,7 @@ export function App() {
             <Route path="members" element={<MembersSettingsPage />} />
             <Route path="data-model" element={<DataModelPage />} />
             <Route path="data-model/:plural" element={<ObjectSettingsPage />} />
+            <Route path="api-keys" element={<ApiKeysPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

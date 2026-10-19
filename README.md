@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 7 of 12 (data model settings UI). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 8 of 12 (SDK + CLI). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -40,15 +40,78 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   size, default currency, relations (target object, reverse name, on-delete behaviour),
   required, default values. Deleted objects and fields can be restored or removed for good.
   Changes show up immediately in the sidebar, tables and kanban.
+- **Phase 8:** objects as code. `@crm-replica/sdk` (`defineObject`, `defineField`, `defineView`),
+  the `crm` CLI (`init`, `validate`, `diff`, `push`, `pull`), workspace API keys (Settings → API
+  keys, `Authorization: Bearer crm_…`), `POST /api/metadata/apply` (plan + apply in one
+  transaction), and `examples/sales-app`.
 
 ## What's in the repo
 
-| Path              | What it is                                                                   |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `apps/server`     | NestJS API (`/api`), OpenAPI docs at `/api/docs`, serves the web app in prod |
-| `apps/worker`     | BullMQ worker process; reuses the server's compiled modules                  |
-| `apps/web`        | React 18 + Vite + Tailwind + TanStack Query                                  |
-| `packages/shared` | Types and constants shared by everything (`FieldType`, queue names, …)       |
+| Path                 | What it is                                                                   |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `apps/server`        | NestJS API (`/api`), OpenAPI docs at `/api/docs`, serves the web app in prod |
+| `apps/worker`        | BullMQ worker process; reuses the server's compiled modules                  |
+| `apps/web`           | React 18 + Vite + Tailwind + TanStack Query                                  |
+| `packages/shared`    | Types and constants shared by everything (`FieldType`, queue names, …)       |
+| `packages/sdk`       | `defineObject` / `defineField` / `defineView` for objects as code            |
+| `packages/cli`       | The `crm` command: `init`, `validate`, `diff`, `push`, `pull`                |
+| `examples/sales-app` | A Deal object, a kanban view and a table view, defined as code               |
+
+## Objects as code
+
+Define objects, fields and views in TypeScript and sync them like a database migration.
+
+```ts
+// examples/sales-app/objects/deal.ts
+import { defineObject, FieldType } from '@crm-replica/sdk';
+
+export default defineObject({
+  nameSingular: 'deal',
+  namePlural: 'deals',
+  labelSingular: 'Deal',
+  labelPlural: 'Deals',
+  fields: [
+    { name: 'name', label: 'Name', type: FieldType.TEXT },
+    { name: 'amount', label: 'Amount', type: FieldType.CURRENCY },
+    {
+      name: 'stage',
+      label: 'Stage',
+      type: FieldType.SELECT,
+      options: ['Lead', 'Negotiation', 'Won', 'Lost'],
+    },
+    { name: 'closeDate', label: 'Close Date', type: FieldType.DATE_TIME },
+  ],
+});
+```
+
+```console
+$ crm diff
+App sales-app → workspace Northwind at http://localhost:3000
+
+  + Create object deal (Deals) with 4 fields
+      + name (TEXT)
+      + amount (CURRENCY)
+      + stage (SELECT)
+      + closeDate (DATE_TIME)
+  + Add field deal.company (Relation → company)
+  + Create table view "Big deals" on deal
+  + Create kanban view "Deal pipeline" on deal
+
+4 to create, 0 to update, 0 to remove
+
+$ crm push --yes
+✓ Applied 4 change(s) to the workspace.
+```
+
+- `crm diff` previews the plan. `crm push` applies it in **one transaction** (all or nothing).
+- Changes that delete data (removing a field or object, changing a field's type) are refused
+  unless you pass `--allow-destructive`.
+- A push only removes what that app created. Fields and objects made in the UI are never
+  deleted by code, and matching UI-made objects are adopted.
+- `crm pull` writes the workspace's custom objects and views back to code.
+- Authenticate with an API key from **Settings → API keys** (`CRM_API_KEY` or the app's `.env`).
+
+See [examples/sales-app](examples/sales-app) to try it.
 
 ## Local setup (macOS)
 

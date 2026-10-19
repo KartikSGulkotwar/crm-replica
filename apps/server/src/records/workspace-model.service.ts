@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { ObjectMetadataEntity } from '../metadata/object-metadata.entity';
 import { buildWorkspaceModel, ObjectModel, WorkspaceModel } from './object-model';
 
@@ -8,12 +8,18 @@ import { buildWorkspaceModel, ObjectModel, WorkspaceModel } from './object-model
 export class WorkspaceModelService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async load(workspace: { id: string; schemaName: string }): Promise<WorkspaceModel> {
-    const entities = await this.dataSource.getRepository(ObjectMetadataEntity).find({
-      where: { workspaceId: workspace.id },
-      relations: { fields: true },
-      order: { position: 'ASC', createdAt: 'ASC' },
-    });
+  /** Pass `em` inside a transaction to see its uncommitted metadata changes. */
+  async load(
+    workspace: { id: string; schemaName: string },
+    em?: EntityManager,
+  ): Promise<WorkspaceModel> {
+    const entities = await (em ?? this.dataSource.manager)
+      .getRepository(ObjectMetadataEntity)
+      .find({
+        where: { workspaceId: workspace.id },
+        relations: { fields: true },
+        order: { position: 'ASC', createdAt: 'ASC' },
+      });
     return buildWorkspaceModel(workspace.schemaName, entities);
   }
 

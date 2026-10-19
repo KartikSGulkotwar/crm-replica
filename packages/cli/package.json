@@ -1,0 +1,29 @@
+{
+  "name": "@crm-replica/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "crm: validate, diff, push and pull objects-as-code apps.",
+  "bin": {
+    "crm": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@crm-replica/sdk": "workspace:*",
+    "@crm-replica/shared": "workspace:*",
+    "commander": "^13.1.0",
+    "jiti": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "vitest": "^3.2.7"
+  }
+}

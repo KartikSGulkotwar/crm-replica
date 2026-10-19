@@ -12,6 +12,7 @@ import { MIGRATIONS } from './database/migrations';
 import { HealthModule } from './health/health.module';
 import { RecordsModule } from './records/records.module';
 import { ViewsModule } from './views/views.module';
+import { AppsModule } from './apps/apps.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 
@@ -45,6 +46,7 @@ const staticModules = existsSync(webDist)
     EventEmitterModule.forRoot(),
     RecordsModule,
     ViewsModule,
+    AppsModule,
     ...staticModules,
   ],
 })

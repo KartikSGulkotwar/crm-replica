@@ -12,5 +12,6 @@ import { ViewsService } from './views.service';
   ],
   controllers: [ViewsController],
   providers: [ViewsService],
+  exports: [ViewsService],
 })
 export class ViewsModule {}

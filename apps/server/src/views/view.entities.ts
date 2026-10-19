@@ -42,6 +42,10 @@ export class ViewEntity {
   @Column('uuid', { name: 'created_by', nullable: true })
   createdBy: string | null;
 
+  /** Name of the app (objects-as-code) that manages this, or null if created in the UI. */
+  @Column('text', { name: 'managed_by_app', nullable: true })
+  managedByApp: string | null;
+
   @OneToMany(() => ViewFieldEntity, (f) => f.view)
   fields: ViewFieldEntity[];
 

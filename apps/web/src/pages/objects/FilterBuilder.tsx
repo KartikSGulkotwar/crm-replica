@@ -32,6 +32,7 @@ export function filterableFields(object: ObjectMetadataDto): FieldMetadataDto[] 
     settings: null,
     relation: null,
     position: 1000,
+    managedByApp: null,
     deletedAt: null,
   });
   return [...object.fields, system('createdAt', 'Created at'), system('updatedAt', 'Updated at')];

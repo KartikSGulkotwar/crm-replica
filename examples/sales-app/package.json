@@ -1,0 +1,16 @@
+{
+  "name": "@crm-replica/example-sales-app",
+  "private": true,
+  "description": "Example objects-as-code app: a Deal object with a kanban pipeline and a 'Big deals' view.",
+  "scripts": {
+    "validate": "crm validate",
+    "diff": "crm diff",
+    "push": "crm push",
+    "pull": "crm pull",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@crm-replica/cli": "workspace:*",
+    "@crm-replica/sdk": "workspace:*"
+  }
+}

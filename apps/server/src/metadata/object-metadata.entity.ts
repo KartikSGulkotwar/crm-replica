@@ -53,6 +53,10 @@ export class ObjectMetadataEntity {
   @Column('timestamptz', { name: 'deleted_at', nullable: true })
   deletedAt: Date | null;
 
+  /** Name of the app (objects-as-code) that manages this, or null if created in the UI. */
+  @Column('text', { name: 'managed_by_app', nullable: true })
+  managedByApp: string | null;
+
   @OneToMany(() => FieldMetadataEntity, (f) => f.object)
   fields: FieldMetadataEntity[];
 

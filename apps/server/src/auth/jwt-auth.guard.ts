@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuthedRequest, IS_OPTIONAL_AUTH, IS_PUBLIC } from './auth.decorators';
 import { SESSION_COOKIE } from './session-cookie';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 import { UserEntity } from './user.entity';
 
 export interface SessionPayload {
@@ -22,6 +23,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     @InjectRepository(UserEntity) private readonly users: Repository<UserEntity>,
+    private readonly apiKeys: ApiKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -45,6 +47,16 @@ export class JwtAuthGuard implements CanActivate {
   }
 
   private async authenticate(req: AuthedRequest): Promise<boolean> {
+    // CLI and integrations: `Authorization: Bearer crm_…` (acts as the admin who created the key).
+    const header = req.headers.authorization;
+    if (header) {
+      const match = /^Bearer\s+(\S+)$/i.exec(header);
+      const user = match ? await this.apiKeys.authenticate(match[1]) : null;
+      if (!user) throw new UnauthorizedException('Invalid or revoked API key');
+      req.auth = { user, workspace: user.workspace, viaApiKey: true };
+      return true;
+    }
+
     const token: unknown = req.cookies?.[SESSION_COOKIE];
     if (typeof token !== 'string' || !token) throw new UnauthorizedException('Please log in');
 

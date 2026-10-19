@@ -35,6 +35,8 @@ export interface WorkspaceRef {
 
 interface CreateObjectOptions {
   isCustom?: boolean;
+  /** The app (objects-as-code) creating it; also set on the fields listed in the input. */
+  managedByApp?: string | null;
   isSystem?: boolean;
   position?: number;
   em?: EntityManager;
@@ -75,9 +77,9 @@ export class MetadataService {
 
   async listObjects(
     workspaceId: string,
-    opts: { includeDeleted?: boolean } = {},
+    opts: { includeDeleted?: boolean; em?: EntityManager } = {},
   ): Promise<ObjectMetadataDto[]> {
-    const all = await this.loadAll(this.dataSource.manager, workspaceId);
+    const all = await this.loadAll(opts.em ?? this.dataSource.manager, workspaceId);
     return all
       .filter((o) => opts.includeDeleted || !o.deletedAt)
       .map((o) => toObjectDto(o, all, opts.includeDeleted ?? false));
@@ -152,6 +154,7 @@ export class MetadataService {
           isCustom: opts.isCustom ?? true,
           isSystem: opts.isSystem ?? false,
           labelIdentifierFieldName: labelIdentifier,
+          managedByApp: opts.managedByApp ?? null,
           position:
             opts.position ??
             Math.max(-1, ...all.filter((o) => !o.isSystem).map((o) => o.position)) + 1,
@@ -159,7 +162,9 @@ export class MetadataService {
       );
       await this.schemaSync.createTable(em, workspace.schemaName, tableName);
       for (const field of fields) {
-        await this.addField(em, workspace, object.id, field, opts.isCustom ?? true);
+        // The default "name" field (when none were given) isn't managed by the app.
+        const managed = input.fields?.length ? (opts.managedByApp ?? null) : null;
+        await this.addField(em, workspace, object.id, field, opts.isCustom ?? true, managed);
       }
       return this.getObjectIn(em, workspace.id, object.id);
     });
@@ -169,8 +174,9 @@ export class MetadataService {
     workspace: WorkspaceRef,
     objectId: string,
     input: UpdateObjectInput,
+    em?: EntityManager,
   ): Promise<ObjectMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const object = this.findActiveObject(all, objectId);
       if (object.isSystem) throw new BadRequestException('System objects can’t be changed');
@@ -197,8 +203,12 @@ export class MetadataService {
    * Step 1 of deleting: hides the object (and relation fields pointing at it) but keeps the
    * table and data, so it can be restored. `destroyObject` removes it for good.
    */
-  async softDeleteObject(workspace: WorkspaceRef, objectId: string): Promise<ObjectMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+  async softDeleteObject(
+    workspace: WorkspaceRef,
+    objectId: string,
+    em?: EntityManager,
+  ): Promise<ObjectMetadataDto> {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const object = this.findActiveObject(all, objectId);
       if (!object.isCustom) throw new BadRequestException('Standard objects can’t be deleted');
@@ -216,8 +226,12 @@ export class MetadataService {
     });
   }
 
-  async restoreObject(workspace: WorkspaceRef, objectId: string): Promise<ObjectMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+  async restoreObject(
+    workspace: WorkspaceRef,
+    objectId: string,
+    em?: EntityManager,
+  ): Promise<ObjectMetadataDto> {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const object = this.findObject(all, objectId);
       if (!object.deletedAt) throw new BadRequestException('This object isn’t deleted');
@@ -237,8 +251,12 @@ export class MetadataService {
   }
 
   /** Step 2: drops the table, its data and every relation field pointing at it. Irreversible. */
-  async destroyObject(workspace: WorkspaceRef, objectId: string): Promise<void> {
-    await this.tx(workspace.id, undefined, async (em) => {
+  async destroyObject(
+    workspace: WorkspaceRef,
+    objectId: string,
+    em?: EntityManager,
+  ): Promise<void> {
+    await this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const object = this.findObject(all, objectId);
       if (!object.deletedAt)
@@ -263,12 +281,20 @@ export class MetadataService {
     workspace: WorkspaceRef,
     objectId: string,
     input: NormalizedFieldInput,
+    opts: { em?: EntityManager; managedByApp?: string | null } = {},
   ): Promise<FieldMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+    return this.tx(workspace.id, opts.em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const object = this.findActiveObject(all, objectId);
       if (object.isSystem) throw new BadRequestException('System objects can’t get custom fields');
-      const field = await this.addField(em, workspace, object.id, input, true);
+      const field = await this.addField(
+        em,
+        workspace,
+        object.id,
+        input,
+        true,
+        opts.managedByApp ?? null,
+      );
       return this.getFieldIn(em, workspace.id, field.id);
     });
   }
@@ -277,8 +303,9 @@ export class MetadataService {
     workspace: WorkspaceRef,
     fieldId: string,
     input: UpdateFieldInput,
+    em?: EntityManager,
   ): Promise<FieldMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const { field, object } = this.findActiveField(all, fieldId);
       if (object.isSystem) throw new BadRequestException('System objects can’t be changed');
@@ -356,8 +383,12 @@ export class MetadataService {
   }
 
   /** Hides the field; the column and its data stay until `destroyField`. */
-  async softDeleteField(workspace: WorkspaceRef, fieldId: string): Promise<FieldMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+  async softDeleteField(
+    workspace: WorkspaceRef,
+    fieldId: string,
+    em?: EntityManager,
+  ): Promise<FieldMetadataDto> {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const { field, object } = this.findActiveField(all, fieldId);
       if (!field.isCustom) throw new BadRequestException('Standard fields can’t be deleted');
@@ -372,8 +403,12 @@ export class MetadataService {
     });
   }
 
-  async restoreField(workspace: WorkspaceRef, fieldId: string): Promise<FieldMetadataDto> {
-    return this.tx(workspace.id, undefined, async (em) => {
+  async restoreField(
+    workspace: WorkspaceRef,
+    fieldId: string,
+    em?: EntityManager,
+  ): Promise<FieldMetadataDto> {
+    return this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const { field, object } = this.findField(all, fieldId);
       if (!field.deletedAt) throw new BadRequestException('This field isn’t deleted');
@@ -393,8 +428,8 @@ export class MetadataService {
   }
 
   /** Drops the column and its data. Irreversible. */
-  async destroyField(workspace: WorkspaceRef, fieldId: string): Promise<void> {
-    await this.tx(workspace.id, undefined, async (em) => {
+  async destroyField(workspace: WorkspaceRef, fieldId: string, em?: EntityManager): Promise<void> {
+    await this.tx(workspace.id, em, async (em) => {
       const all = await this.loadAll(em, workspace.id);
       const { field, object } = this.findField(all, fieldId);
       if (!field.deletedAt)
@@ -402,6 +437,20 @@ export class MetadataService {
       await this.schemaSync.dropField(em, workspace.schemaName, object.tableName, field);
       await em.delete(FieldMetadataEntity, { id: field.id });
     });
+  }
+
+  /** Marks an object or field as managed by an app (used when an app adopts what already exists). */
+  async setManagedBy(
+    em: EntityManager,
+    target: 'object' | 'field',
+    id: string,
+    app: string | null,
+  ): Promise<void> {
+    await em.update(
+      target === 'object' ? ObjectMetadataEntity : FieldMetadataEntity,
+      { id },
+      { managedByApp: app },
+    );
   }
 
   // ------------------------------------------------------------ internals
@@ -413,6 +462,7 @@ export class MetadataService {
     objectId: string,
     input: NormalizedFieldInput,
     isCustom: boolean,
+    managedByApp: string | null = null,
   ): Promise<FieldMetadataEntity> {
     const all = await this.loadAll(em, workspace.id);
     const object = this.findActiveObject(all, objectId);
@@ -467,6 +517,7 @@ export class MetadataService {
           ? (input.relation.inverseLabel ?? object.labelPlural)
           : null,
         relationOnDelete: input.relation?.onDelete ?? null,
+        managedByApp,
         position: Math.max(-1, ...object.fields.map((f) => f.position)) + 1,
       }),
     );
@@ -481,6 +532,11 @@ export class MetadataService {
   }
 
   /** Runs `fn` in a transaction (or the caller's), holding this workspace's metadata lock. */
+  /** Holds this workspace's metadata lock until the surrounding transaction ends. */
+  async lock(em: EntityManager, workspaceId: string): Promise<void> {
+    await em.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`metadata:${workspaceId}`]);
+  }
+
   private async tx<T>(
     workspaceId: string,
     em: EntityManager | undefined,
@@ -590,6 +646,7 @@ function toFieldDto(field: FieldMetadataEntity, all: ObjectMetadataEntity[]): Fi
         }
       : null,
     position: field.position,
+    managedByApp: field.managedByApp ?? null,
     deletedAt: field.deletedAt?.toISOString() ?? null,
   };
 }
@@ -612,6 +669,7 @@ function toObjectDto(
     isSystem: object.isSystem,
     labelIdentifierFieldName: object.labelIdentifierFieldName,
     position: object.position,
+    managedByApp: object.managedByApp ?? null,
     deletedAt: object.deletedAt?.toISOString() ?? null,
     fields: object.fields.filter(isLive).map((f) => toFieldDto(f, all)),
     inverseRelations: incomingRelations(all, object.id)

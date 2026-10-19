@@ -42,3 +42,20 @@ export interface InviteLinkResponse {
   token: string;
   url: string;
 }
+
+export interface ApiKeyDto {
+  id: string;
+  name: string;
+  /** First characters of the key, e.g. `crm_Ab12Cd34`, to tell keys apart. */
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  createdBy: { id: string; name: string } | null;
+}
+
+/** Returned once, when the key is created. The full key can't be shown again. */
+export interface CreatedApiKeyDto extends ApiKeyDto {
+  key: string;
+}
+
+export const API_KEY_PREFIX = 'crm_';

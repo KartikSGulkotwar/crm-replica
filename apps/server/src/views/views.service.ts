@@ -40,7 +40,7 @@ export class ViewsService {
   async list(workspace: WorkspaceRef, objectRef: string): Promise<ViewDto[]> {
     const model = await this.models.load(workspace);
     const object = this.findObject(model, objectRef);
-    await this.ensureDefault(workspace.id, object);
+    await this.ensureDefault(this.dataSource.manager, workspace.id, object);
     const views = await this.dataSource.getRepository(ViewEntity).find({
       where: { workspaceId: workspace.id, objectId: object.id },
       relations: { fields: true, filters: true, sorts: true },
@@ -49,16 +49,42 @@ export class ViewsService {
     return views.map((v) => toDto(v, object));
   }
 
-  async get(workspace: WorkspaceRef, id: string): Promise<ViewDto> {
-    const { view, object } = await this.load(workspace, id);
+  /** Every view of every live object (used to plan app pushes). */
+  async listAll(
+    workspace: WorkspaceRef,
+    em: EntityManager = this.dataSource.manager,
+  ): Promise<ViewDto[]> {
+    const model = await this.models.load(workspace, em);
+    const views = await em.getRepository(ViewEntity).find({
+      where: { workspaceId: workspace.id },
+      relations: { fields: true, filters: true, sorts: true },
+    });
+    return views.flatMap((v) => {
+      const object = model.objects.find((o) => o.id === v.objectId);
+      return object ? [toDto(v, object)] : [];
+    });
+  }
+
+  async get(
+    workspace: WorkspaceRef,
+    id: string,
+    em: EntityManager = this.dataSource.manager,
+  ): Promise<ViewDto> {
+    const { view, object } = await this.load(workspace, id, em);
     return toDto(view, object);
   }
 
-  async create(workspace: WorkspaceRef, userId: string, input: CreateView): Promise<ViewDto> {
-    const model = await this.models.load(workspace);
-    const object = this.findObject(model, input.object);
-    await this.ensureDefault(workspace.id, object);
-    const id = await this.dataSource.transaction(async (em) => {
+  /** Pass `em` to run inside an outer transaction (e.g. an app push). */
+  async create(
+    workspace: WorkspaceRef,
+    userId: string,
+    input: CreateView,
+    opts: { em?: EntityManager; managedByApp?: string | null } = {},
+  ): Promise<ViewDto> {
+    const run = async (em: EntityManager) => {
+      const model = await this.models.load(workspace, em);
+      const object = this.findObject(model, input.object);
+      await this.ensureDefault(em, workspace.id, object);
       const count = await em.countBy(ViewEntity, { objectId: object.id });
       const view = await em.save(
         em.create(ViewEntity, {
@@ -71,6 +97,7 @@ export class ViewsService {
           isDefault: false,
           position: count,
           createdBy: userId,
+          managedByApp: opts.managedByApp ?? null,
         }),
       );
       await this.apply(em, view, object, {
@@ -79,27 +106,38 @@ export class ViewsService {
         filters: input.filters,
         sorts: input.sorts,
       });
-      return view.id;
-    });
-    return this.get(workspace, id);
+      return this.get(workspace, view.id, em);
+    };
+    return opts.em ? run(opts.em) : this.dataSource.transaction(run);
   }
 
-  async update(workspace: WorkspaceRef, id: string, input: UpdateView): Promise<ViewDto> {
-    const { view, object } = await this.load(workspace, id);
-    await this.dataSource.transaction(async (em) => {
+  async update(
+    workspace: WorkspaceRef,
+    id: string,
+    input: UpdateView,
+    opts: { em?: EntityManager; managedByApp?: string | null } = {},
+  ): Promise<ViewDto> {
+    const run = async (em: EntityManager) => {
+      const { view, object } = await this.load(workspace, id, em);
       if (input.name !== undefined) view.name = input.name;
       if (input.type !== undefined) view.type = input.type;
       if (input.filterConjunction !== undefined) view.filterConjunction = input.filterConjunction;
       if (input.position !== undefined) view.position = input.position;
+      if (opts.managedByApp !== undefined) view.managedByApp = opts.managedByApp;
       await this.apply(em, view, object, input);
-    });
-    return this.get(workspace, id);
+      return this.get(workspace, id, em);
+    };
+    return opts.em ? run(opts.em) : this.dataSource.transaction(run);
   }
 
-  async remove(workspace: WorkspaceRef, id: string): Promise<void> {
-    const { view } = await this.load(workspace, id);
+  async remove(
+    workspace: WorkspaceRef,
+    id: string,
+    em: EntityManager = this.dataSource.manager,
+  ): Promise<void> {
+    const { view } = await this.load(workspace, id, em);
     if (view.isDefault) throw new BadRequestException('The default view can’t be deleted');
-    await this.dataSource.getRepository(ViewEntity).delete({ id: view.id });
+    await em.getRepository(ViewEntity).delete({ id: view.id });
   }
 
   /** Validates and writes the parts of a view that reference fields, then saves it. */
@@ -212,8 +250,8 @@ export class ViewsService {
   }
 
   /** Creates the object's default "All …" view the first time it's needed. */
-  private async ensureDefault(workspaceId: string, object: ObjectModel) {
-    await this.dataSource.query(
+  private async ensureDefault(em: EntityManager, workspaceId: string, object: ObjectModel) {
+    await em.query(
       `INSERT INTO core.view (workspace_id, object_id, name, type, is_default, position)
        VALUES ($1, $2, $3, 'TABLE', true, 0)
        ON CONFLICT (object_id) WHERE is_default DO NOTHING`,
@@ -221,14 +259,18 @@ export class ViewsService {
     );
   }
 
-  private async load(workspace: WorkspaceRef, id: string) {
+  private async load(
+    workspace: WorkspaceRef,
+    id: string,
+    em: EntityManager = this.dataSource.manager,
+  ) {
     if (!isUuid(id)) throw new NotFoundException('View not found');
-    const view = await this.dataSource.getRepository(ViewEntity).findOne({
+    const view = await em.getRepository(ViewEntity).findOne({
       where: { id, workspaceId: workspace.id },
       relations: { fields: true, filters: true, sorts: true },
     });
     if (!view) throw new NotFoundException('View not found');
-    const model = await this.models.load(workspace);
+    const model = await this.models.load(workspace, em);
     const object = model.objects.find((o) => o.id === view.objectId);
     if (!object) throw new NotFoundException('This view’s object was deleted');
     return { view, object };
@@ -277,6 +319,7 @@ function toDto(view: ViewEntity, object: ObjectModel): ViewDto {
     kanbanFieldName: kanbanField?.name ?? null,
     filterConjunction: view.filterConjunction,
     position: view.position,
+    managedByApp: view.managedByApp ?? null,
     fields,
     filters: [...view.filters]
       .sort((a, b) => a.position - b.position)

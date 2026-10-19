@@ -20,6 +20,7 @@ export function setupApp(app: INestApplication) {
     .setDescription('REST API for the CRM. Record endpoints are generated from the data model.')
     .setVersion('0.1.0')
     .addCookieAuth('crm_session')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', description: 'Workspace API key (crm_…)' })
     .build();
   const document = SwaggerModule.createDocument(app, config);
   setBaseOpenApiDocument(document);

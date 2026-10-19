@@ -4,6 +4,7 @@ const TABS = [
   { to: '/settings/general', label: 'General' },
   { to: '/settings/members', label: 'Members' },
   { to: '/settings/data-model', label: 'Data model' },
+  { to: '/settings/api-keys', label: 'API keys' },
 ];
 
 export function SettingsLayout() {

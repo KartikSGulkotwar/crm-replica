@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "pnpm --filter @crm-replica/shared build",
+    "postinstall": "pnpm --filter @crm-replica/shared --filter @crm-replica/sdk build",
     "dev": "pnpm --filter \"@crm-replica/worker...\" build && pnpm --parallel --filter \"./apps/*\" --filter @crm-replica/shared dev",
     "build": "pnpm -r build",
     "lint": "eslint .",

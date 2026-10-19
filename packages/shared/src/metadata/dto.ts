@@ -25,6 +25,8 @@ export interface FieldMetadataDto {
   settings: FieldSettings | null;
   relation: FieldRelationDto | null;
   position: number;
+  /** App (objects-as-code) that manages this field, or null if created in the UI. */
+  managedByApp: string | null;
   /** Set when soft-deleted: the column still exists until permanently deleted. */
   deletedAt: string | null;
 }
@@ -52,6 +54,8 @@ export interface ObjectMetadataDto {
   isSystem: boolean;
   labelIdentifierFieldName: string | null;
   position: number;
+  /** App (objects-as-code) that manages this object, or null if created in the UI. */
+  managedByApp: string | null;
   deletedAt: string | null;
   fields: FieldMetadataDto[];
   inverseRelations: InverseRelationDto[];

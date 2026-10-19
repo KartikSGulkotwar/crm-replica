@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { loadEnv } from '../config/env';
 import { MetadataModule } from '../metadata/metadata.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
@@ -24,6 +25,7 @@ import { UserEntity } from './user.entity';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: loadEnv().AUTH_RATE_LIMIT }]),
     WorkspaceModule,
     MetadataModule,
+    ApiKeysModule,
   ],
   controllers: [AuthController],
   providers: [
