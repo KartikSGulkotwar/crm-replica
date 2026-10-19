@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 6 of 12 (views). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 7 of 12 (data model settings UI). See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -35,6 +35,11 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   operators per field type), sort builder, show/hide and reorder fields, column widths and
   order saved to the view, and a kanban board grouped by a select field with drag and drop
   between and within columns.
+- **Phase 7:** Settings → Data model. Create custom objects (names, API names, icon) and add,
+  edit or delete fields of all 13 types from the browser: select options with colors, rating
+  size, default currency, relations (target object, reverse name, on-delete behaviour),
+  required, default values. Deleted objects and fields can be restored or removed for good.
+  Changes show up immediately in the sidebar, tables and kanban.
 
 ## What's in the repo
 

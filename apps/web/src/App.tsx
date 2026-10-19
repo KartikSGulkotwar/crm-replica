@@ -8,6 +8,8 @@ import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ObjectPage } from './pages/objects/ObjectPage';
 import { RecordPage } from './pages/objects/RecordPage';
+import { DataModelPage } from './pages/settings/data-model/DataModelPage';
+import { ObjectSettingsPage } from './pages/settings/data-model/ObjectSettingsPage';
 import { GeneralSettingsPage } from './pages/settings/GeneralSettingsPage';
 import { MembersSettingsPage } from './pages/settings/MembersSettingsPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
@@ -30,6 +32,8 @@ export function App() {
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />
             <Route path="members" element={<MembersSettingsPage />} />
+            <Route path="data-model" element={<DataModelPage />} />
+            <Route path="data-model/:plural" element={<ObjectSettingsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

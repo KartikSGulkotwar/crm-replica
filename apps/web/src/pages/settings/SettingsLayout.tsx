@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 const TABS = [
   { to: '/settings/general', label: 'General' },
   { to: '/settings/members', label: 'Members' },
+  { to: '/settings/data-model', label: 'Data model' },
 ];
 
 export function SettingsLayout() {
