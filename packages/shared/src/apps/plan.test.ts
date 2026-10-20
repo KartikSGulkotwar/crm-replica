@@ -298,3 +298,63 @@ describe('planApp', () => {
     expect(badField.success).toBe(false);
   });
 });
+
+describe('planApp: workflows', () => {
+  const won = {
+    name: 'Won follow-up',
+    trigger: { type: 'RECORD_UPDATED', object: 'deal', fields: ['stage'] },
+    steps: [{ id: 'mail', name: 'Email', type: 'SEND_EMAIL', to: 'a@example.com', subject: 'Won' }],
+  };
+  const parsedDefinition = { trigger: won.trigger, steps: [{ ...won.steps[0], body: '' }] };
+  const current = (extra: Record<string, unknown> = {}) => ({
+    id: 'w1',
+    name: 'Won follow-up',
+    description: null,
+    managedByApp: 'sales-app',
+    definition: parsedDefinition as never,
+    ...extra,
+  });
+
+  it('creates and publishes new workflows after the objects they use', () => {
+    const p = plan({ objects: [dealDef], workflows: [won] });
+    expect(p.changes.map((c) => c.kind)).toEqual(['createObject', 'createField', 'createWorkflow']);
+    expect(p.changes[2].summary).toBe('Create and publish workflow "Won follow-up" (1 step)');
+  });
+
+  it('is a no-op when the published definition matches (key order and defaults don’t matter)', () => {
+    expect(
+      plan(
+        { objects: [dealDef], workflows: [won] },
+        { objects: [company, dealInWorkspace()], workflows: [current()] },
+      ).changes,
+    ).toEqual([]);
+  });
+
+  it('republishes changed workflows, adopts UI ones, and removes (destructively) ones it no longer declares', () => {
+    const changed = { ...won, steps: [{ ...won.steps[0], subject: 'Won!' }] };
+    const p = plan(
+      { objects: [dealDef], workflows: [changed] },
+      {
+        objects: [company, dealInWorkspace()],
+        workflows: [current({ managedByApp: null }), current({ id: 'w2', name: 'Old one' })],
+      },
+    );
+    expect(p.changes.map((c) => [c.kind, c.destructive, c.details])).toEqual([
+      [
+        'updateWorkflow',
+        false,
+        ['trigger or steps changed: published as a new version', 'now managed by this app'],
+      ],
+      ['removeWorkflow', true, []],
+    ]);
+  });
+
+  it('rejects invalid workflows in the manifest', () => {
+    expect(
+      appManifestSchema.safeParse({
+        name: 'sales-app',
+        workflows: [{ name: 'X', trigger: { type: 'NOPE' } }],
+      }).success,
+    ).toBe(false);
+  });
+});

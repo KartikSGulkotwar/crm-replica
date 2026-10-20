@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { CrmClient } from './client';
-import { fileSlug, objectSource, viewSource } from './codegen';
+import { fileSlug, objectSource, viewSource, workflowSource } from './codegen';
 import { AppConfig, CliError, DEFAULT_URL, loadConfig } from './config';
-import { loadApp, OBJECTS_DIR, ValidationError, VIEWS_DIR } from './load';
+import { loadApp, OBJECTS_DIR, ValidationError, VIEWS_DIR, WORKFLOWS_DIR } from './load';
 import { bold, dim, formatPlan, green, red, yellow } from './output';
 import { initFiles } from './templates';
 
@@ -71,7 +71,7 @@ program
     const { manifest } = await loadApp(cfg);
     console.log(
       green(
-        `✓ ${cfg.name}: ${manifest.objects.length} object(s), ${manifest.views.length} view(s) are valid`,
+        `✓ ${cfg.name}: ${manifest.objects.length} object(s), ${manifest.views.length} view(s), ${manifest.workflows.length} workflow(s) are valid`,
       ),
     );
   });
@@ -133,7 +133,9 @@ program
 
 program
   .command('pull')
-  .description('Write the workspace’s custom objects (and fields) and saved views to code.')
+  .description(
+    'Write the workspace’s custom objects (and fields), saved views and workflows to code.',
+  )
   .option('-f, --force', 'overwrite existing files')
   .action(async (opts: { force?: boolean }) => {
     const cfg = config();
@@ -159,6 +161,10 @@ program
             viewSource(view, object.namePlural),
           );
       }
+    }
+    for (const workflow of await client.workflows()) {
+      const source = workflowSource(workflow);
+      if (source) write(join(WORKFLOWS_DIR, `${fileSlug(workflow.name)}.ts`), source);
     }
     for (const f of written) console.log(`${green('wrote')}   ${f}`);
     for (const f of skipped)

@@ -18,6 +18,9 @@ const SYMBOL: Record<ChangeKind, [string, Style]> = {
   removeField: ['-', 'red'],
   removeObject: ['-', 'red'],
   removeView: ['-', 'red'],
+  createWorkflow: ['+', 'green'],
+  updateWorkflow: ['~', 'yellow'],
+  removeWorkflow: ['-', 'red'],
 };
 
 export const bold = (t: string) => color('bold', t);

@@ -5,11 +5,13 @@ import {
   planApp,
   ViewDto,
   ViewType,
+  WorkflowDto,
+  workflowDefinitionSchema,
 } from '@crm-replica/shared';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { fileSlug, objectSource, viewSource } from './codegen';
+import { fileSlug, objectSource, viewSource, workflowSource } from './codegen';
 import { CliError, loadConfig } from './config';
 import { loadApp, ValidationError } from './load';
 import { formatPlan } from './output';
@@ -25,6 +27,7 @@ describe('loading apps', () => {
     expect(manifest.name).toBe('sales-app');
     expect(manifest.objects.map((o) => o.nameSingular)).toEqual(['deal']);
     expect(manifest.views.map((v) => v.name).sort()).toEqual(['Big deals', 'Deal pipeline']);
+    expect(manifest.workflows.map((w) => w.name)).toEqual(['Opportunity won: kickoff']);
   });
 
   it('reports problems with the file they come from', async () => {
@@ -228,5 +231,89 @@ describe('formatPlan', () => {
     expect(out).toContain('+ Create object deal (Deals) with 4 fields');
     expect(out).toContain('- Remove field deal.x; its values are deleted [destructive]');
     expect(out).toContain('1 to create, 0 to update, 1 to remove (1 destructive)');
+  });
+});
+
+describe('crm pull: workflows', () => {
+  it('writes workflows that plan to zero changes against the workspace', async () => {
+    const definition = workflowDefinitionSchema.parse({
+      trigger: {
+        type: 'RECORD_UPDATED',
+        object: 'deal',
+        fields: ['stage'],
+        when: { conditions: [{ left: '{{trigger.record.stage}}', op: 'eq', right: 'WON' }] },
+      },
+      steps: [
+        {
+          id: 'task',
+          name: 'Create task',
+          type: 'CREATE_RECORD',
+          object: 'task',
+          values: { title: "Kick off {{trigger.record.name}}'s deal" },
+        },
+        {
+          id: 'big',
+          name: 'Big?',
+          type: 'IF_ELSE',
+          condition: {
+            conditions: [{ left: '{{trigger.record.amount.amount}}', op: 'gte', right: '100000' }],
+          },
+          then: [
+            {
+              id: 'mail',
+              name: 'Email',
+              type: 'SEND_EMAIL',
+              to: 'a@example.com',
+              subject: 'Big win',
+              body: 'Line 1\nLine 2',
+            },
+          ],
+        },
+      ],
+    });
+    const workflow = {
+      id: 'w1',
+      name: 'Won deal: follow up',
+      description: 'Follow-up',
+      isActive: true,
+      managedByApp: null,
+      draftVersion: null,
+      activeVersion: {
+        id: 'v1',
+        version: 3,
+        status: 'ACTIVE',
+        definition,
+        createdAt: '',
+        publishedAt: '',
+      },
+      lastRun: null,
+      nextRunAt: null,
+      createdAt: '',
+      updatedAt: '',
+    } as WorkflowDto;
+    const dir = join(tmp, 'pulled-workflows');
+    mkdirSync(join(dir, 'workflows'), { recursive: true });
+    writeFileSync(join(dir, 'crm.json'), JSON.stringify({ name: 'pulled-app' }));
+    const source = workflowSource(workflow)!;
+    expect(source).toContain('type: TriggerType.RECORD_UPDATED');
+    expect(source).toContain('type: StepType.IF_ELSE');
+    writeFileSync(join(dir, 'workflows', `${fileSlug(workflow.name)}.ts`), source);
+
+    const { manifest } = await loadApp(loadConfig(dir));
+    const plan = planApp(manifest, {
+      objects: [],
+      views: [],
+      workflows: [
+        {
+          id: 'w1',
+          name: workflow.name,
+          description: 'Follow-up',
+          managedByApp: 'pulled-app',
+          definition,
+        },
+      ],
+    });
+    expect(plan.errors).toEqual([]);
+    expect(plan.changes).toEqual([]);
   });
 });

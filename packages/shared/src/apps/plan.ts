@@ -10,6 +10,7 @@ import {
   UpdateObjectInput,
 } from '../metadata/schemas';
 import { ViewDto, ViewType } from '../views';
+import { WorkflowDefinition, workflowDefinitionSchema } from '../workflows/definition';
 import { AppManifest, ObjectDefinitionInput, viewDefinitionSchema } from './manifest';
 
 export type ChangeKind =
@@ -24,7 +25,10 @@ export type ChangeKind =
   | 'removeObject'
   | 'createView'
   | 'updateView'
-  | 'removeView';
+  | 'removeView'
+  | 'createWorkflow'
+  | 'updateWorkflow'
+  | 'removeWorkflow';
 
 /** A view as the executor creates/updates it. `visibleFields` lists visible fields in order. */
 export interface PlannedView {
@@ -50,7 +54,32 @@ export type ChangePayload =
   | { kind: 'removeObject'; objectId: string }
   | { kind: 'createView'; view: PlannedView }
   | { kind: 'updateView'; viewId: string; view: PlannedView; adopt: boolean }
-  | { kind: 'removeView'; viewId: string };
+  | { kind: 'removeView'; viewId: string }
+  | { kind: 'createWorkflow'; workflow: PlannedWorkflow }
+  | {
+      kind: 'updateWorkflow';
+      workflowId: string;
+      workflow: PlannedWorkflow;
+      republish: boolean;
+      adopt: boolean;
+    }
+  | { kind: 'removeWorkflow'; workflowId: string };
+
+export interface PlannedWorkflow {
+  name: string;
+  description: string | null;
+  definition: WorkflowDefinition;
+}
+
+/** A workflow as the planner sees it in the workspace. */
+export interface CurrentWorkflow {
+  id: string;
+  name: string;
+  description: string | null;
+  managedByApp: string | null;
+  /** The active (published) definition, or null if it's off. */
+  definition: WorkflowDefinition | null;
+}
 
 export interface PlanChange {
   kind: ChangeKind;
@@ -78,6 +107,7 @@ export interface CurrentState {
   /** All objects including soft-deleted ones and their deleted fields. */
   objects: ObjectMetadataDto[];
   views: ViewDto[];
+  workflows?: CurrentWorkflow[];
 }
 
 const ORDER: ChangeKind[] = [
@@ -93,7 +123,23 @@ const ORDER: ChangeKind[] = [
   'createView',
   'updateView',
   'removeView',
+  'createWorkflow',
+  'updateWorkflow',
+  'removeWorkflow',
 ];
+
+/** JSON with sorted keys, so equal definitions compare equal regardless of key order. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .filter((k) => (value as Record<string, unknown>)[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
 
 const json = (v: unknown) => JSON.stringify(v ?? null);
 const effectiveMax = (s: { max?: number } | null | undefined) => s?.max ?? 5;
@@ -525,6 +571,69 @@ export function planApp(manifest: AppManifest, current: CurrentState): AppPlan {
         view: v.name,
         summary: `Remove view "${v.name}" on ${v.objectName}`,
         payload: { kind: 'removeView', viewId: v.id },
+      });
+    }
+  }
+
+  // Workflows: matched by name. Pushing a changed one publishes it as a new version.
+  const declaredWorkflows = new Set<string>();
+  for (const w of manifest.workflows) {
+    declaredWorkflows.add(w.name);
+    const planned: PlannedWorkflow = {
+      name: w.name,
+      description: w.description ?? null,
+      definition: workflowDefinitionSchema.parse({ trigger: w.trigger, steps: w.steps ?? [] }),
+    };
+    const existing = (current.workflows ?? []).find((c) => c.name === w.name);
+    const stepCount = planned.definition.steps.length;
+    if (!existing) {
+      add({
+        kind: 'createWorkflow',
+        object: '',
+        summary: `Create and publish workflow "${w.name}" (${stepCount} step${stepCount === 1 ? '' : 's'})`,
+        payload: { kind: 'createWorkflow', workflow: planned },
+      });
+      continue;
+    }
+    const republish =
+      !existing.definition || canonical(existing.definition) !== canonical(planned.definition);
+    const describe = (existing.description ?? null) !== planned.description;
+    const adopt = existing.managedByApp !== app;
+    const details = [
+      ...(republish
+        ? [
+            existing.definition
+              ? 'trigger or steps changed: published as a new version'
+              : 'turned on (published)',
+          ]
+        : []),
+      ...(describe ? ['description changed'] : []),
+      ...(adopt ? ['now managed by this app'] : []),
+    ];
+    if (details.length) {
+      add({
+        kind: 'updateWorkflow',
+        object: '',
+        summary: `Update workflow "${w.name}"`,
+        details,
+        payload: {
+          kind: 'updateWorkflow',
+          workflowId: existing.id,
+          workflow: planned,
+          republish,
+          adopt,
+        },
+      });
+    }
+  }
+  for (const w of current.workflows ?? []) {
+    if (w.managedByApp === app && !declaredWorkflows.has(w.name)) {
+      add({
+        kind: 'removeWorkflow',
+        object: '',
+        destructive: true,
+        summary: `Remove workflow "${w.name}" and its run history`,
+        payload: { kind: 'removeWorkflow', workflowId: w.id },
       });
     }
   }

@@ -1,7 +1,12 @@
-import type { FilterOperator, OptionColor, RelationOnDelete } from '@crm-replica/shared';
-import { FieldType, ViewType } from '@crm-replica/shared';
+import type {
+  FilterOperator,
+  OptionColor,
+  RelationOnDelete,
+  WorkflowDefinitionInput,
+} from '@crm-replica/shared';
+import { FieldType, StepType, TriggerType, ViewType } from '@crm-replica/shared';
 
-export { FieldType, ViewType };
+export { FieldType, StepType, TriggerType, ViewType };
 export type { FilterOperator, OptionColor, RelationOnDelete };
 
 /** A select option: just a label (`'Won'`), or a label with a stored value and/or color. */
@@ -103,5 +108,20 @@ export function defineField(definition: FieldDefinition): FieldDefinition {
 
 /** Declares a saved view. Default-export it from a file in your app's `views/` folder. */
 export function defineView(definition: ViewDefinition): ViewDefinition {
+  return definition;
+}
+
+/**
+ * A workflow: a trigger and steps. Matched by `name`; `crm push` publishes it (a changed
+ * definition becomes a new version). Steps can use `{{trigger.record.…}}` and
+ * `{{steps.<id>.result.…}}`.
+ */
+export interface WorkflowDefinition extends WorkflowDefinitionInput {
+  name: string;
+  description?: string;
+}
+
+/** Declares a workflow. Default-export it from a file in your app's `workflows/` folder. */
+export function defineWorkflow(definition: WorkflowDefinition): WorkflowDefinition {
   return definition;
 }

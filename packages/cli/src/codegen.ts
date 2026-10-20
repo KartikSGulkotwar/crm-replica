@@ -1,4 +1,10 @@
-import type { FieldMetadataDto, ObjectMetadataDto, ViewDto } from '@crm-replica/shared';
+import type {
+  FieldMetadataDto,
+  ObjectMetadataDto,
+  ViewDto,
+  WorkflowDto,
+  WorkflowStep,
+} from '@crm-replica/shared';
 import { FieldType, labelToOptionValue } from '@crm-replica/shared';
 
 /** Marks raw code (e.g. `FieldType.TEXT`) inside a value being turned into source. */
@@ -126,6 +132,41 @@ export function viewSource(view: ViewDto, objectPlural: string): string {
   };
   const imports = view.type !== 'TABLE' ? 'defineView, ViewType' : 'defineView';
   return `${HEADER}import { ${imports} } from '@crm-replica/sdk';\n\nexport default defineView(${toSource(def)});\n`;
+}
+
+/** Steps with their `type` written as `StepType.X` (recursing into if/else branches). */
+function stepsCode(steps: WorkflowStep[]): unknown[] {
+  return steps.map((step) => {
+    const { type, ...rest } = step as WorkflowStep & {
+      then?: WorkflowStep[];
+      else?: WorkflowStep[];
+    };
+    const out: Record<string, unknown> = {
+      id: rest.id,
+      name: rest.name,
+      type: new Code(`StepType.${type}`),
+    };
+    for (const [k, v] of Object.entries(rest)) {
+      if (k === 'id' || k === 'name') continue;
+      out[k] =
+        (k === 'then' || k === 'else') && Array.isArray(v) ? stepsCode(v as WorkflowStep[]) : v;
+    }
+    return out;
+  });
+}
+
+/** Source for a workflow file (its active version, or the draft if it was never published). */
+export function workflowSource(workflow: WorkflowDto): string | null {
+  const definition = (workflow.activeVersion ?? workflow.draftVersion)?.definition;
+  if (!definition) return null;
+  const { type, ...trigger } = definition.trigger;
+  const def: Record<string, unknown> = {
+    name: workflow.name,
+    ...(workflow.description ? { description: workflow.description } : {}),
+    trigger: { type: new Code(`TriggerType.${type}`), ...trigger },
+    steps: stepsCode(definition.steps),
+  };
+  return `${HEADER}import { defineWorkflow, StepType, TriggerType } from '@crm-replica/sdk';\n\nexport default defineWorkflow(${toSource(def)});\n`;
 }
 
 /** `Big deals` → `big-deals`. */

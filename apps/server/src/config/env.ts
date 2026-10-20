@@ -11,6 +11,18 @@ const envSchema = z.object({
   BULLMQ_PREFIX: z.string().min(1).default('crm'),
   APP_URL: z.string().url().default('http://localhost:5173'),
   JWT_SECRET: z.string().optional(),
+  /** First retry delay for failed workflow steps (doubles each attempt). */
+  WORKFLOW_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(2000),
+  /** Attempts per workflow run job (1 + retries). */
+  WORKFLOW_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(4),
+  /** Let HTTP steps call private/internal addresses (localhost, 10.x, …). Off by default. */
+  WORKFLOW_HTTP_ALLOW_PRIVATE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Send workflow emails through Resend; without it, emails are only logged. */
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default('CRM Replica <onboarding@resend.dev>'),
   /** Sign-up / login / accept-invite attempts allowed per IP per minute. */
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });

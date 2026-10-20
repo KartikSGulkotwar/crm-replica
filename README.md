@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 8 of 12 (SDK + CLI). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 9 of 12 (workflows). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -44,6 +44,13 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   the `crm` CLI (`init`, `validate`, `diff`, `push`, `pull`), workspace API keys (Settings → API
   keys, `Authorization: Bearer crm_…`), `POST /api/metadata/apply` (plan + apply in one
   transaction), and `examples/sales-app`.
+- **Phase 9:** workflows. Triggers (record created / updated, optionally only for certain
+  fields and conditions / deleted, manual button, cron schedule) and steps (create, update and
+  find records, send email, HTTP request, wait, if/else) with `{{variables}}`. Record events go
+  through a BullMQ queue to the worker, which runs steps with retries and exponential backoff,
+  resumes after failures and delays, and stops automation loops at depth 5. Draft → publish
+  versioning, run history with each step's input / output / errors, a step editor with a
+  variable picker, test runs, and `defineWorkflow` for workflows as code.
 
 ## What's in the repo
 

@@ -14,13 +14,18 @@ export interface TestApp {
  * Boots the real AppModule (migrations included) against the test database. Modules are
  * required lazily so a test file can change process.env first.
  */
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(opts: { withWorker?: boolean } = {}): Promise<TestApp> {
   Logger.overrideLogger(['error']);
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { AppModule } = require('../../src/app.module');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { setupApp } = require('../../src/setup-app');
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  // The worker's workflow processor can run in the same process for end-to-end tests.
+  const imports = opts.withWorker
+    ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+      [AppModule, require('../../src/workflows/workflows-worker.module').WorkflowsWorkerModule]
+    : [AppModule];
+  const moduleRef = await Test.createTestingModule({ imports }).compile();
   const app = moduleRef.createNestApplication();
   setupApp(app);
   await app.init();

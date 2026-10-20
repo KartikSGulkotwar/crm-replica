@@ -1,20 +1,12 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { QUEUES } from '@crm-replica/shared';
-import { loadEnv } from '@crm-replica/server/config/env';
-import { redisOptionsFromUrl } from '@crm-replica/server/redis/redis-connection';
+import { WorkerRootModule } from '@crm-replica/server/worker-root.module';
 import { SystemProcessor } from './system.processor';
 
-const env = loadEnv();
-
+/** The worker: workflow runs (from the server's WorkerRootModule) plus the health-check ping. */
 @Module({
-  imports: [
-    BullModule.forRoot({
-      connection: redisOptionsFromUrl(env.REDIS_URL),
-      prefix: env.BULLMQ_PREFIX,
-    }),
-    BullModule.registerQueue({ name: QUEUES.SYSTEM }),
-  ],
+  imports: [WorkerRootModule, BullModule.registerQueue({ name: QUEUES.SYSTEM })],
   providers: [SystemProcessor],
 })
 export class WorkerModule {}

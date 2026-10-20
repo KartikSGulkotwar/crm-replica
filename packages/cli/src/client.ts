@@ -1,9 +1,10 @@
 import type {
-  ApplyResult,
   AppManifest,
+  ApplyResult,
   MetadataExport,
   SessionResponse,
   ViewDto,
+  WorkflowDto,
 } from '@crm-replica/shared';
 import { AppConfig, CliError } from './config';
 
@@ -63,6 +64,10 @@ export class CrmClient {
 
   async export(): Promise<MetadataExport> {
     return (await this.request<MetadataExport>('GET', '/metadata/export')).body;
+  }
+
+  async workflows(): Promise<WorkflowDto[]> {
+    return (await this.request<WorkflowDto[]>('GET', '/workflows')).body;
   }
 
   async views(objectPlural: string): Promise<ViewDto[]> {

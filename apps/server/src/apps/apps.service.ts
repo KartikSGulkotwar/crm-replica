@@ -17,6 +17,7 @@ import { MetadataService, WorkspaceRef } from '../metadata/metadata.service';
 import { ObjectMetadataEntity } from '../metadata/object-metadata.entity';
 import { WorkspaceModelService } from '../records/workspace-model.service';
 import { ViewsService } from '../views/views.service';
+import { WorkflowsService } from '../workflows/workflows.service';
 
 type ApplyRequest = z.output<typeof applyRequestSchema>;
 const publicChanges = (plan: AppPlan) =>
@@ -33,6 +34,7 @@ export class AppsService {
     private readonly metadata: MetadataService,
     private readonly views: ViewsService,
     private readonly models: WorkspaceModelService,
+    private readonly workflows: WorkflowsService,
   ) {}
 
   async apply(
@@ -96,6 +98,7 @@ export class AppsService {
     return {
       objects: await this.metadata.listObjects(workspace.id, { includeDeleted: true, em }),
       views: await this.views.listAll(workspace, em),
+      workflows: await this.workflows.listForPlan(workspace.id, em),
     };
   }
 
@@ -184,6 +187,20 @@ export class AppsService {
       }
       case 'removeView':
         await this.views.remove(ws, p.viewId, em);
+        return;
+      case 'createWorkflow':
+        await this.workflows.applyFromApp(ws, userId, p.workflow, { em, app });
+        return;
+      case 'updateWorkflow':
+        await this.workflows.applyFromApp(ws, userId, p.workflow, {
+          em,
+          app,
+          workflowId: p.workflowId,
+          republish: p.republish,
+        });
+        return;
+      case 'removeWorkflow':
+        await this.workflows.remove(ws.id, p.workflowId, em);
         return;
     }
   }

@@ -329,16 +329,92 @@ describe('API keys and objects-as-code (e2e)', () => {
       expect(invalid.body.message[0]).toContain('App names use lowercase');
     });
 
+    it('pushes workflows as code: publishes, re-pushes as no-op, republishes changes, removes', async () => {
+      const won = {
+        name: 'Deal won follow-up',
+        trigger: {
+          type: 'RECORD_UPDATED',
+          object: 'deal',
+          fields: ['stage'],
+          when: { conditions: [{ left: '{{trigger.record.stage}}', op: 'eq', right: 'WON' }] },
+        },
+        steps: [
+          {
+            id: 'task',
+            name: 'Create task',
+            type: 'CREATE_RECORD',
+            object: 'task',
+            values: { title: 'Kick off {{trigger.record.name}}' },
+          },
+        ],
+      };
+      const first = await apply({
+        manifest: manifest({ workflows: [won] }),
+        allowDestructive: true,
+      }).expect(200);
+      expect(first.body.changes.map((c: { kind: string }) => c.kind)).toContain('createWorkflow');
+      const wf = (await admin.get('/api/workflows').expect(200)).body.find(
+        (w: { name: string }) => w.name === 'Deal won follow-up',
+      );
+      expect(wf).toMatchObject({
+        isActive: true,
+        managedByApp: 'sales-app',
+        activeVersion: { version: 1 },
+      });
+
+      expect(
+        (
+          await apply({ manifest: manifest({ workflows: [won] }), dryRun: true }).expect(200)
+        ).body.changes.filter((c: { kind: string }) => c.kind.includes('Workflow')),
+      ).toEqual([]);
+
+      const changed = {
+        ...won,
+        steps: [{ ...won.steps[0], values: { title: 'Celebrate {{trigger.record.name}}' } }],
+      };
+      const second = await apply({
+        manifest: manifest({ workflows: [changed] }),
+        allowDestructive: true,
+      }).expect(200);
+      expect(second.body.changes.map((c: { summary: string }) => c.summary)).toContain(
+        'Update workflow "Deal won follow-up"',
+      );
+      expect(
+        (await admin.get(`/api/workflows/${wf.id}`).expect(200)).body.activeVersion.version,
+      ).toBe(2);
+
+      // A broken workflow (unknown object) fails the whole push and changes nothing.
+      const broken = {
+        ...won,
+        name: 'Broken',
+        trigger: { type: 'RECORD_CREATED', object: 'unicorn' },
+      };
+      const failed = await apply({
+        manifest: manifest({ workflows: [changed, broken] }),
+        allowDestructive: true,
+      }).expect(400);
+      expect(failed.body.message).toContain('Create and publish workflow "Broken"');
+      expect(
+        (await admin.get('/api/workflows').expect(200)).body.map((w: { name: string }) => w.name),
+      ).not.toContain('Broken');
+
+      const removal = await apply({ manifest: manifest({ workflows: [] }) }).expect(409);
+      expect(removal.body.result.changes).toContainEqual(
+        expect.objectContaining({ kind: 'removeWorkflow', destructive: true }),
+      );
+      await apply({ manifest: manifest({ workflows: [] }), allowDestructive: true }).expect(200);
+      await admin.get(`/api/workflows/${wf.id}`).expect(404);
+    });
+
     it('removes what the app no longer declares', async () => {
       const res = await apply({
         manifest: { name: 'sales-app', objects: [], views: [] },
         allowDestructive: true,
       }).expect(200);
+      // (partner was already removed by the workflow test's pushes, which didn't declare it)
       expect(
-        res.body.changes
-          .map((c: { kind: string; object: string }) => `${c.kind} ${c.object}`)
-          .sort(),
-      ).toEqual(['removeObject deal', 'removeObject partner']);
+        res.body.changes.map((c: { kind: string; object: string }) => `${c.kind} ${c.object}`),
+      ).toEqual(['removeObject deal']);
       expect(
         (await admin.get('/api/views').query({ object: 'companies' }).expect(200)).body.length,
       ).toBeGreaterThan(0);

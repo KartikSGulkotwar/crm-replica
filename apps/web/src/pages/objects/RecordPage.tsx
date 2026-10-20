@@ -10,6 +10,7 @@ import { recordLabel } from '../../lib/record-label';
 import { relationExpands, useDeleteRecords, useRecord, useUpdateRecord } from '../../lib/records';
 import { useToast } from '../../lib/toast';
 import { NotFoundPage } from '../NotFoundPage';
+import { RunWorkflowButton } from '../workflows/RunWorkflowButton';
 
 function RelatedList({
   relation,
@@ -136,6 +137,7 @@ export function RecordPage() {
             </p>
           </div>
         </div>
+        {!readOnly && <RunWorkflowButton objectName={object.nameSingular} recordId={id} />}
         {!readOnly && (
           <Button variant="danger" onClick={onDelete} loading={remove.isPending}>
             <Trash2 aria-hidden className="size-4" />

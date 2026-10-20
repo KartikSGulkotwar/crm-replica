@@ -1,12 +1,14 @@
 # sales-app (objects-as-code example)
 
-A custom **Deal** object, a **Deal pipeline** kanban view and a **Big deals** table view, defined in
+A custom **Deal** object, a **Deal pipeline** kanban view, a **Big deals** table view and an
+**Opportunity won** workflow, defined in
 TypeScript with `@crm-replica/sdk` and synced to a workspace with the `crm` CLI.
 
 ```
 objects/deal.ts          defineObject: fields, select options, relation to Company
 views/deal-pipeline.ts   defineView: kanban grouped by stage
 views/big-deals.ts       defineView: amount ≥ 50,000, sorted by close date
+workflows/won-opportunity.ts  defineWorkflow: opportunity moves to Won → create task + email
 crm.json                 app name ("sales-app") and server URL
 ```
 

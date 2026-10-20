@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { apiNameSchema, createObjectSchema, formatZodIssues } from '../metadata/schemas';
 import { ViewType } from '../views';
+import { workflowDefinitionSchema } from '../workflows/definition';
 
 /** e.g. `sales-app`. Stored on everything the app manages, so pushes only touch their own things. */
 export const appNameSchema = z
@@ -49,6 +50,22 @@ export const viewDefinitionSchema = z
   .strict();
 
 export type ViewDefinition = z.input<typeof viewDefinitionSchema>;
+
+/** A workflow in an app: matched by name; pushing publishes it as a new version. */
+export const workflowManifestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+    trigger: z.unknown(),
+    steps: z.unknown().optional(),
+  })
+  .strict()
+  .superRefine((w, ctx) => {
+    const parsed = workflowDefinitionSchema.safeParse({ trigger: w.trigger, steps: w.steps ?? [] });
+    if (!parsed.success)
+      for (const message of formatZodIssues(parsed.error))
+        ctx.addIssue({ code: 'custom', message });
+  });
 export type ObjectDefinitionInput = z.input<typeof createObjectSchema>;
 
 /**
@@ -60,6 +77,7 @@ export const appManifestSchema = z
     name: appNameSchema,
     objects: z.array(z.record(z.string(), z.unknown())).default([]),
     views: z.array(viewDefinitionSchema).default([]),
+    workflows: z.array(workflowManifestSchema).default([]),
   })
   .strict()
   .superRefine((m, ctx) => {
@@ -96,6 +114,14 @@ export const appManifestSchema = z
         code: 'custom',
         path: ['views'],
         message: `View "${dupView}" is declared twice`,
+      });
+    const workflowNames = m.workflows.map((w) => w.name);
+    const dupWorkflow = workflowNames.find((n, j) => workflowNames.indexOf(n) !== j);
+    if (dupWorkflow)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['workflows'],
+        message: `Workflow "${dupWorkflow}" is declared twice`,
       });
   });
 

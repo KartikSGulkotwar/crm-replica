@@ -7,6 +7,8 @@ import { SignupPage } from './pages/auth/SignupPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ObjectPage } from './pages/objects/ObjectPage';
+import { WorkflowPage } from './pages/workflows/WorkflowPage';
+import { WorkflowsPage } from './pages/workflows/WorkflowsPage';
 import { RecordPage } from './pages/objects/RecordPage';
 import { ApiKeysPage } from './pages/settings/ApiKeysPage';
 import { DataModelPage } from './pages/settings/data-model/DataModelPage';
@@ -29,6 +31,8 @@ export function App() {
           <Route index element={<HomePage />} />
           <Route path="objects/:plural" element={<ObjectPage />} />
           <Route path="objects/:plural/:id" element={<RecordPage />} />
+          <Route path="workflows" element={<WorkflowsPage />} />
+          <Route path="workflows/:id" element={<WorkflowPage />} />
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />

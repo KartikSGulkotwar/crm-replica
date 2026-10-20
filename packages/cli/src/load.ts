@@ -7,11 +7,12 @@ import type { AppConfig } from './config';
 const EXTENSIONS = /\.(ts|mts|js|mjs|cjs)$/;
 export const OBJECTS_DIR = 'objects';
 export const VIEWS_DIR = 'views';
+export const WORKFLOWS_DIR = 'workflows';
 
 export interface LoadedApp {
   manifest: AppManifest;
   /** Where each object / view came from, for error messages. */
-  files: { objects: string[]; views: string[] };
+  files: { objects: string[]; views: string[]; workflows: string[] };
 }
 
 export class ValidationError extends Error {
@@ -54,16 +55,25 @@ export async function loadApp(config: AppConfig): Promise<LoadedApp> {
   };
   const objectFiles = listFiles(join(config.dir, OBJECTS_DIR));
   const viewFiles = listFiles(join(config.dir, VIEWS_DIR));
+  const workflowFiles = listFiles(join(config.dir, WORKFLOWS_DIR));
   const objects = await load(objectFiles);
   const views = await load(viewFiles);
+  const workflows = await load(workflowFiles);
   if (problems.length) throw new ValidationError(problems);
 
-  const parsed = appManifestSchema.safeParse({ name: config.name, objects, views });
+  const parsed = appManifestSchema.safeParse({ name: config.name, objects, views, workflows });
   if (!parsed.success) {
     throw new ValidationError(
       parsed.error.issues.map((issue) => {
         const [section, index, ...rest] = issue.path;
-        const files = section === 'objects' ? objectFiles : section === 'views' ? viewFiles : [];
+        const files =
+          section === 'objects'
+            ? objectFiles
+            : section === 'views'
+              ? viewFiles
+              : section === 'workflows'
+                ? workflowFiles
+                : [];
         const where =
           typeof index === 'number' && files[index]
             ? relative(config.dir, files[index])
@@ -72,5 +82,8 @@ export async function loadApp(config: AppConfig): Promise<LoadedApp> {
       }),
     );
   }
-  return { manifest: parsed.data, files: { objects: objectFiles, views: viewFiles } };
+  return {
+    manifest: parsed.data,
+    files: { objects: objectFiles, views: viewFiles, workflows: workflowFiles },
+  };
 }
