@@ -33,7 +33,8 @@ import { AgentToolExecutor, buildTools, ToolName, WRITE_TOOLS } from './agent-to
 const MAX_TURNS = 12;
 /** A turn holds its conversation's lock at most this long (if the process dies mid-turn). */
 const BUSY_TTL_SECONDS = 15 * 60;
-const busyKey = (conversationId: string) => `agent-busy:${conversationId}`;
+const busyKey = (conversationId: string) =>
+  `${loadEnv().BULLMQ_PREFIX}:agent-busy:${conversationId}`;
 const isUuid = (v: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 type Emit = (event: AgentStreamEvent) => void;
@@ -460,7 +461,7 @@ export class AgentService {
 
   /** Per-user limit on assistant requests (shared across API instances via Redis). */
   private async rateLimit(userId: string) {
-    const key = `agent-rate:${userId}:${Math.floor(Date.now() / 60_000)}`;
+    const key = `${loadEnv().BULLMQ_PREFIX}:agent-rate:${userId}:${Math.floor(Date.now() / 60_000)}`;
     const count = await this.redis.incr(key);
     if (count === 1) await this.redis.expire(key, 70);
     if (count > loadEnv().AGENT_RATE_LIMIT) {

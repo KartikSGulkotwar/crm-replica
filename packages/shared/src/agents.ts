@@ -1,14 +1,9 @@
 import { z } from 'zod';
 
+import type { RecordRef } from './activities';
+
 /** A record the assistant used or changed, for links in the chat. */
-export interface AgentRecordRef {
-  object: string;
-  objectLabel: string;
-  id: string;
-  title: string;
-  /** In-app path, e.g. `/objects/companies/<id>`. */
-  url: string;
-}
+export type AgentRecordRef = RecordRef;
 
 export interface ProposedChange {
   field: string;

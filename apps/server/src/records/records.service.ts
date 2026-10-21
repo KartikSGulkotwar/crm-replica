@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  ChangeSource,
+  FieldType,
   ListRecordsResponse,
   RECORDS_DEFAULT_LIMIT,
   RECORDS_MAX_LIMIT,
@@ -17,6 +19,8 @@ import { RECORD_EVENTS, RecordEvent, RecordEventName } from '../events/record-ev
 import { ident, qualified } from '../schema-sync/sql';
 import { buildFilterSql, FilterError, parseFilterParam } from './filter-builder';
 import { FieldModel, InverseRelationModel, ObjectModel, WorkspaceModel } from './object-model';
+import { replaceTargets, resolveTargets, splitTargets } from './activity-targets';
+import { recordTitle } from './record-ref';
 import { parseSortParam, SortPlan } from './sort-cursor';
 import { SqlParams } from './sql-params';
 import { parseRecordInput, RecordValidationError, rowToRecord, UUID } from './value-codec';
@@ -27,6 +31,9 @@ export interface RecordContext {
   workspace: { id: string; schemaName: string };
   userId: string | null;
   depth?: number;
+  /** What made the change (default `user`), e.g. `workflow` with the workflow's id. */
+  source?: ChangeSource;
+  sourceId?: string;
 }
 
 export interface ListQuery {
@@ -134,27 +141,41 @@ export class RecordsService {
   async create(ctx: RecordContext, plural: string, body: unknown): Promise<RecordDto> {
     const { model, object } = await this.models.object(ctx.workspace, plural);
     assertWritable(object);
-    const record = await this.wrap(async () => {
-      const input = parseRecordInput(object, body, 'create');
-      await this.assertRelationTargets(this.dataSource.manager, model, input.relationIds);
-      const params = new SqlParams();
-      const table = qualified(model.schema, object.tableName);
-      const names = [...input.columns.map((c) => ident(c.column)), '"created_by"'];
-      const values = [
-        ...input.columns.map((c) => `${params.add(c.value)}::${c.cast}`),
-        `${params.add(ctx.userId)}::uuid`,
-      ];
-      if (!input.columns.some((c) => c.column === 'position')) {
-        // New records go to the end of the manual order.
-        names.push('"position"');
-        values.push(`(SELECT COALESCE(MAX("position"), 0) + 1 FROM ${table})`);
-      }
-      const [row] = (await this.dataSource.query(
-        `INSERT INTO ${table} (${names.join(', ')}) VALUES (${values.join(', ')}) RETURNING *`,
-        params.values,
-      )) as Row[];
-      return rowToRecord(object, row);
-    });
+    const record = await this.wrap(() =>
+      this.dataSource.transaction(async (em) => {
+        // Notes and tasks may say which records they're about (`targets`).
+        const { body: values, targets } = splitTargets(object, body);
+        const input = parseRecordInput(object, values, 'create');
+        await this.assertRelationTargets(em, model, input.relationIds);
+        const resolved = targets ? await resolveTargets(em, model, targets) : [];
+        const params = new SqlParams();
+        const table = qualified(model.schema, object.tableName);
+        const names = [...input.columns.map((c) => ident(c.column)), '"created_by"'];
+        const columnValues = [
+          ...input.columns.map((c) => `${params.add(c.value)}::${c.cast}`),
+          `${params.add(ctx.userId)}::uuid`,
+        ];
+        if (!input.columns.some((c) => c.column === 'position')) {
+          // New records go to the end of the manual order.
+          names.push('"position"');
+          columnValues.push(`(SELECT COALESCE(MAX("position"), 0) + 1 FROM ${table})`);
+        }
+        const [row] = (await em.query(
+          `INSERT INTO ${table} (${names.join(', ')}) VALUES (${columnValues.join(', ')}) RETURNING *`,
+          params.values,
+        )) as Row[];
+        const created = rowToRecord(object, row);
+        if (resolved.length) {
+          await replaceTargets(
+            em,
+            ctx.workspace.id,
+            { object: object.nameSingular, id: created.id },
+            resolved,
+          );
+        }
+        return created;
+      }),
+    );
     await this.emit(RECORD_EVENTS.CREATED, ctx, object, record);
     return record;
   }
@@ -174,8 +195,11 @@ export class RecordsService {
     assertWritable(object);
     await this.wrap(async () => {
       if (mode === 'update') await this.findRow(this.dataSource.manager, model, object, id ?? '');
-      const input = parseRecordInput(object, body, mode);
+      const { body: values, targets } =
+        mode === 'create' ? splitTargets(object, body) : { body, targets: null };
+      const input = parseRecordInput(object, values, mode);
       await this.assertRelationTargets(this.dataSource.manager, model, input.relationIds);
+      if (targets) await resolveTargets(this.dataSource.manager, model, targets);
     });
   }
 
@@ -404,10 +428,13 @@ export class RecordsService {
     const event: RecordEvent = {
       name,
       workspaceId: ctx.workspace.id,
+      schemaName: ctx.workspace.schemaName,
       objectName: object.nameSingular,
       recordId: record.id,
       record,
       actorUserId: ctx.userId,
+      source: ctx.source ?? 'user',
+      sourceId: ctx.sourceId ?? null,
       depth: ctx.depth ?? 0,
       occurredAt: new Date().toISOString(),
       ...extra,
@@ -418,6 +445,28 @@ export class RecordsService {
       // The change is already committed; a failing listener must not turn it into an error.
       this.logger.error(`Listener for ${name} failed: ${(error as Error).message}`);
     }
+  }
+
+  /** A readable version of a value where the raw one isn't: select labels, linked record titles. */
+  async describeValue(
+    model: WorkspaceModel,
+    field: FieldModel,
+    value: unknown,
+  ): Promise<string | undefined> {
+    const labelOf = (v: unknown) => field.options?.find((o) => o.value === v)?.label ?? String(v);
+    if (field.type === FieldType.SELECT && typeof value === 'string') return labelOf(value);
+    if (field.type === FieldType.MULTI_SELECT && Array.isArray(value))
+      return value.map(labelOf).join(', ');
+    if (field.type === FieldType.RELATION && typeof value === 'string' && UUID.test(value)) {
+      const target = model.objects.find((o) => o.nameSingular === field.relationTarget);
+      if (!target) return undefined;
+      const [row] = (await this.dataSource.query(
+        `SELECT * FROM ${qualified(model.schema, target.tableName)} WHERE "id" = $1::uuid`,
+        [value],
+      )) as Row[];
+      return row ? recordTitle(target, rowToRecord(target, row)) : undefined;
+    }
+    return undefined;
   }
 
   /** Maps validation errors and Postgres errors to clean 400s. */

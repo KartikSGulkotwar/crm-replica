@@ -16,6 +16,9 @@ export class WorkspaceEntity {
   @Column('text', { name: 'invite_token' })
   inviteToken: string;
 
+  @Column('timestamptz', { name: 'demo_data_loaded_at', nullable: true })
+  demoDataLoadedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

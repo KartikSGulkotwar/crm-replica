@@ -9,7 +9,10 @@ import {
   RecordDto,
 } from '@crm-replica/shared';
 import { z } from 'zod';
-import { FieldModel, ObjectModel, WorkspaceModel } from '../records/object-model';
+import { ObjectModel, WorkspaceModel } from '../records/object-model';
+import { ActivitiesService } from '../records/activities.service';
+import { isActivityObject } from '../records/activity-targets';
+import { recordRef, recordTitle } from '../records/record-ref';
 import { RecordContext, RecordsService } from '../records/records.service';
 import { WorkspaceModelService } from '../records/workspace-model.service';
 
@@ -48,30 +51,6 @@ export interface ToolOutcome {
 }
 
 export class ToolInputError extends Error {}
-
-/** The record's display title (first + last name for people-like objects). */
-export function recordTitle(object: ObjectModel, record: RecordDto): string {
-  const key = object.labelIdentifierFieldName;
-  let title = key && typeof record[key] === 'string' ? (record[key] as string).trim() : '';
-  if (
-    key === 'firstName' &&
-    object.fields.some((f) => f.name === 'lastName') &&
-    typeof record.lastName === 'string'
-  ) {
-    title = [title, record.lastName.trim()].filter(Boolean).join(' ');
-  }
-  return title || `Untitled ${object.labelSingular.toLowerCase()}`;
-}
-
-export function recordRef(object: ObjectModel, record: RecordDto): AgentRecordRef {
-  return {
-    object: object.nameSingular,
-    objectLabel: object.labelSingular,
-    id: record.id,
-    title: recordTitle(object, record),
-    url: `/objects/${object.namePlural}/${record.id}`,
-  };
-}
 
 /** A record trimmed for the model: no empty values, long text shortened, plus title and link. */
 function compact(
@@ -210,6 +189,7 @@ export class AgentToolExecutor {
   constructor(
     private readonly records: RecordsService,
     private readonly models: WorkspaceModelService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   /** Validates input; throws ToolInputError for bad input (reported back to the model). */
@@ -268,6 +248,11 @@ export class AgentToolExecutor {
               fields,
               related,
               builtIn: ['id', 'createdAt', 'updatedAt'],
+              ...(isActivityObject(object)
+                ? {
+                    linking: `To link a new ${object.labelSingular.toLowerCase()} to records (e.g. a company or deal), add "targets": [{"object": "company", "id": "<record id>"}] to create_record data.`,
+                  }
+                : {}),
             }),
             records: [],
           };
@@ -350,7 +335,7 @@ export class AgentToolExecutor {
             kind: 'create',
             object: object.nameSingular,
             objectLabel: object.labelSingular,
-            changes: await this.changes(ctx, model, object, args.data),
+            changes: await this.changes(model, object, args.data),
             status: 'pending',
           },
         };
@@ -367,7 +352,7 @@ export class AgentToolExecutor {
             object: object.nameSingular,
             objectLabel: object.labelSingular,
             record: recordRef(object, current),
-            changes: await this.changes(ctx, model, object, args.data, current),
+            changes: await this.changes(model, object, args.data, current),
             status: 'pending',
           },
         };
@@ -389,7 +374,6 @@ export class AgentToolExecutor {
 
   /** The proposed field changes, with readable labels for selects and relations. */
   private async changes(
-    ctx: RecordContext,
     model: WorkspaceModel,
     object: ObjectModel,
     data: Record<string, unknown>,
@@ -397,42 +381,30 @@ export class AgentToolExecutor {
   ): Promise<ProposedChange[]> {
     const changes: ProposedChange[] = [];
     for (const [key, after] of Object.entries(data)) {
+      if (key === 'targets' && isActivityObject(object) && Array.isArray(after)) {
+        const refs = await this.activities.refs(model, after as { object: string; id: string }[]);
+        changes.push({
+          field: key,
+          label: 'Linked to',
+          after,
+          afterText: refs.map((r) => r.title).join(', '),
+        });
+        continue;
+      }
       const field = object.fields.find((f) => f.apiKey === key);
       const change: ProposedChange = { field: key, label: field?.label ?? key, after };
       if (current) change.before = current[key] ?? null;
       if (field) {
-        const afterText = await this.valueText(ctx, model, field, after);
+        const afterText = await this.records.describeValue(model, field, after);
         if (afterText) change.afterText = afterText;
         const beforeText = current
-          ? await this.valueText(ctx, model, field, change.before)
+          ? await this.records.describeValue(model, field, change.before)
           : undefined;
         if (beforeText) change.beforeText = beforeText;
       }
       changes.push(change);
     }
     return changes;
-  }
-
-  private async valueText(
-    ctx: RecordContext,
-    model: WorkspaceModel,
-    field: FieldModel,
-    value: unknown,
-  ): Promise<string | undefined> {
-    const labelOf = (v: unknown) => field.options?.find((o) => o.value === v)?.label ?? String(v);
-    if (field.type === FieldType.SELECT && typeof value === 'string') return labelOf(value);
-    if (field.type === FieldType.MULTI_SELECT && Array.isArray(value))
-      return value.map(labelOf).join(', ');
-    if (field.type === FieldType.RELATION && typeof value === 'string') {
-      const target = model.objects.find((o) => o.nameSingular === field.relationTarget);
-      if (!target) return undefined;
-      try {
-        return recordTitle(target, await this.records.get(ctx, target.namePlural, value));
-      } catch {
-        return undefined;
-      }
-    }
-    return undefined;
   }
 
   /** Performs an approved write. */

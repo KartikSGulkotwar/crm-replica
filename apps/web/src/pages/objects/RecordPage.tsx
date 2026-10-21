@@ -1,9 +1,13 @@
 import type { InverseRelationDto, ObjectMetadataDto, RecordDto } from '@crm-replica/shared';
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ActivityPanel } from '../../components/activity/ActivityPanel';
+import { LinkedRecords } from '../../components/activity/LinkedRecords';
 import { EditableField } from '../../components/fields/Field';
 import { ObjectIcon } from '../../components/ObjectIcon';
 import { Button, Card, FormError, FullPageSpinner } from '../../components/ui';
+import { timelineKey } from '../../lib/activities';
 import { formatDateTime } from '../../lib/format';
 import { findObjectByName, orderedFields, useObject } from '../../lib/metadata';
 import { recordLabel } from '../../lib/record-label';
@@ -58,6 +62,7 @@ export function RecordPage() {
   const { plural = '', id = '' } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { object, objects, isPending: metaPending } = useObject(plural);
   const expand = object
     ? [
@@ -89,8 +94,12 @@ export function RecordPage() {
   const save = (values: Record<string, unknown>, optimistic?: Record<string, unknown>) =>
     update.mutate(
       { id, values, optimistic },
-      { onError: (e) => toast(`Couldn’t save: ${(e as Error).message}`, 'error') },
+      {
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: timelineKey(plural, id) }),
+        onError: (e) => toast(`Couldn’t save: ${(e as Error).message}`, 'error'),
+      },
     );
+  const isActivity = object.nameSingular === 'note' || object.nameSingular === 'task';
   const shownInverse = object.inverseRelations.filter((r) => Array.isArray(data[r.name]));
 
   function onDelete() {
@@ -147,32 +156,43 @@ export function RecordPage() {
       </header>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-        <Card title="Details">
-          <dl className="divide-y divide-line">
-            {otherFields.map((field) => (
-              <div
-                key={field.id}
-                className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-3 px-4 py-1.5 sm:grid-cols-[12rem_minmax(0,1fr)]"
-              >
-                <dt className="truncate text-sm text-muted">{field.label}</dt>
-                <dd className="min-w-0 text-sm">
-                  <EditableField
-                    field={field}
-                    record={data}
-                    objects={objects}
-                    onSave={save}
-                    readOnly={readOnly}
-                  />
-                </dd>
-              </div>
-            ))}
-            {otherFields.length === 0 && (
-              <p className="px-4 py-3 text-sm text-muted">No other fields.</p>
-            )}
-          </dl>
-        </Card>
+        <div className="min-w-0 space-y-6">
+          <Card title="Details">
+            <dl className="divide-y divide-line">
+              {otherFields.map((field) => (
+                <div
+                  key={field.id}
+                  className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-3 px-4 py-1.5 sm:grid-cols-[12rem_minmax(0,1fr)]"
+                >
+                  <dt className="truncate text-sm text-muted">{field.label}</dt>
+                  <dd className="min-w-0 text-sm">
+                    <EditableField
+                      field={field}
+                      record={data}
+                      objects={objects}
+                      onSave={save}
+                      readOnly={readOnly}
+                    />
+                  </dd>
+                </div>
+              ))}
+              {otherFields.length === 0 && (
+                <p className="px-4 py-3 text-sm text-muted">No other fields.</p>
+              )}
+            </dl>
+          </Card>
+          {!readOnly && (
+            <ActivityPanel
+              object={object}
+              objects={objects}
+              id={id}
+              withNotesAndTasks={!isActivity}
+            />
+          )}
+        </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
+          {isActivity && <LinkedRecords object={object} id={id} />}
           {shownInverse.map((relation) => (
             <RelatedList
               key={relation.name}
@@ -181,7 +201,7 @@ export function RecordPage() {
               objects={objects}
             />
           ))}
-          {shownInverse.length === 0 && (
+          {shownInverse.length === 0 && !isActivity && (
             <p className="text-sm text-muted">
               Nothing links to this {object.labelSingular.toLowerCase()} yet.
             </p>

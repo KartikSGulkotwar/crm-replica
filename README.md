@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 10 of 12 (AI assistant). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 11 of 12 (polish). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -59,6 +59,15 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   nothing changes until you click **Approve** (or pick which of several changes to apply).
   Conversations are saved per user. Workflows get an **Ask AI** step that summarises, writes or
   classifies (into a select field's options or your own list) and can save the answer to a field.
+- **Phase 11:** polish. Notes and tasks can be linked to any records (create them from a record
+  page, or with `"targets": [{"object": "company", "id": "…"}]` in the API, a workflow or the
+  assistant). Every record page has a **timeline** of who changed what (before → after, with
+  readable values), including changes made by workflows, API keys and the assistant. **⌘K / Ctrl+K**
+  opens a command palette that searches records of every object plus pages and actions. Home
+  shows recent activity and your open tasks. Admins can add **demo data** (30 companies, 60
+  people, 40 opportunities, with notes and tasks) once per workspace from Home or Settings →
+  General. All API requests are rate-limited per user (`API_RATE_LIMIT`, default 600 per minute,
+  counted in Redis); every page was checked at phone width.
 
 ## What's in the repo
 

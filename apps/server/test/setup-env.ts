@@ -10,3 +10,5 @@ process.env.AUTH_RATE_LIMIT = '1000';
 // Fast retries in tests, and let HTTP steps call the local test server.
 process.env.WORKFLOW_RETRY_DELAY_MS = '50';
 process.env.WORKFLOW_HTTP_ALLOW_PRIVATE = 'true';
+// The general per-user API limit would otherwise trip on busy test files.
+process.env.API_RATE_LIMIT = '100000';

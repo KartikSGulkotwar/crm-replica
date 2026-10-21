@@ -87,7 +87,12 @@ export function validateWorkflow(definition: WorkflowDefinition, model: Workspac
         if (!object) problems.push(`${step.name}: object "${step.object}" doesn’t exist`);
         if (object && step.type !== StepType.FIND_RECORDS) {
           for (const key of Object.keys(step.values)) {
-            if (key !== 'position' && !object.fields.some((f) => f.apiKey === key)) {
+            // Notes and tasks created by a workflow can be linked to records with `targets`.
+            const linking =
+              key === 'targets' &&
+              step.type === StepType.CREATE_RECORD &&
+              ['note', 'task'].includes(object.nameSingular);
+            if (key !== 'position' && !linking && !object.fields.some((f) => f.apiKey === key)) {
               const relation = object.fields.find((f) => f.name === key && f.apiKey !== key);
               problems.push(
                 `${step.name}: ${relation ? `use "${relation.apiKey}" to set ${relation.label}` : `${object.labelSingular} has no field "${key}"`}`,

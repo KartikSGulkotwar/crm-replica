@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
+import { ApiRateLimitGuard } from '../common/api-rate-limit.guard';
 import { loadEnv } from '../config/env';
 import { MetadataModule } from '../metadata/metadata.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
@@ -30,8 +31,9 @@ import { UserEntity } from './user.entity';
   controllers: [AuthController],
   providers: [
     AuthService,
-    // Order matters: authenticate first, then check roles.
+    // Order matters: authenticate first, then count the request, then check roles.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: ApiRateLimitGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })

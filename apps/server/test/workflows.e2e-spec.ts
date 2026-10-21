@@ -96,7 +96,12 @@ describe('Workflows (e2e, with a real queue and worker)', () => {
           name: 'Create kickoff task',
           type: 'CREATE_RECORD',
           object: 'task',
-          values: { title: 'Kick off {{trigger.record.name}}', status: 'TO_DO' },
+          values: {
+            title: 'Kick off {{trigger.record.name}}',
+            status: 'TO_DO',
+            // Linked to the deal, so it shows on the deal's page.
+            targets: [{ object: 'opportunity', id: '{{trigger.record.id}}' }],
+          },
         },
         {
           id: 'notify',
@@ -147,6 +152,27 @@ describe('Workflows (e2e, with a real queue and worker)', () => {
       delivered: false,
       provider: 'log',
       to: ['sales@example.com'],
+    });
+
+    // The task is on the deal's page, and both timelines credit the workflow by name.
+    const activities = (
+      await admin.get(`/api/objects/opportunities/${opp.id}/activities`).expect(200)
+    ).body;
+    expect(activities.tasks.map((x: { record: { id: string } }) => x.record.id)).toEqual([task.id]);
+    const dealTimeline = (
+      await admin.get(`/api/objects/opportunities/${opp.id}/timeline`).expect(200)
+    ).body.data;
+    expect(dealTimeline[0]).toMatchObject({
+      kind: 'task_added',
+      source: 'workflow',
+      sourceLabel: 'Won deal follow-up',
+      actor: null,
+      activity: { id: task.id },
+    });
+    expect(dealTimeline[1]).toMatchObject({
+      kind: 'updated',
+      source: 'user',
+      changes: [{ field: 'stage' }],
     });
     // The task really exists.
     await admin.get(`/api/objects/tasks/${task.id}`).expect(200);

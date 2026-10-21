@@ -64,7 +64,13 @@ export class WorkflowEngine {
       now: new Date().toISOString(),
     };
     // Changes made by the workflow are attributed to automation and count towards the loop guard.
-    const recordCtx: RecordContext = { workspace, userId: null, depth: run.depth + 1 };
+    const recordCtx: RecordContext = {
+      workspace,
+      userId: null,
+      depth: run.depth + 1,
+      source: 'workflow',
+      sourceId: run.workflowId,
+    };
     await this.walk(run, definition.steps, context, recordCtx);
   }
 

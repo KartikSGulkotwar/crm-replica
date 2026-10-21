@@ -30,6 +30,8 @@ const envSchema = z.object({
   AGENT_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   /** Sign-up / login / accept-invite attempts allowed per IP per minute. */
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  /** API requests per user (or API key / IP) per minute. */
+  API_RATE_LIMIT: z.coerce.number().int().positive().default(600),
 });
 
 const DEV_JWT_SECRET = 'dev-only-insecure-jwt-secret-change-me';

@@ -23,6 +23,7 @@ const docs = (schema: z.ZodType) => ({
 const ctxOf = ({ workspace, user }: AuthContext): AgentContext => ({
   workspace,
   userId: user.id,
+  source: 'agent',
   userName: user.name,
   workspaceName: workspace.name,
 });

@@ -35,7 +35,8 @@ export class WorkflowTriggerListener {
   @OnEvent(RECORD_EVENTS.DELETED)
   async onRecordEvent(event: RecordEvent): Promise<void> {
     const type = TRIGGER_FOR[event.name];
-    if (!type) return;
+    // Loading demo data adds a lot of records at once; it shouldn't set off automations.
+    if (!type || event.source === 'demo') return;
     const matches = (await this.dataSource.query(
       `SELECT w.id AS workflow_id, v.id AS version_id, v.definition
        FROM core.workflow w JOIN core.workflow_version v ON v.id = w.active_version_id

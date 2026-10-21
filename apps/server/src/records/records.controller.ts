@@ -4,7 +4,11 @@ import { ListRecordsResponse, RecordDto } from '@crm-replica/shared';
 import { Auth, AuthContext } from '../auth/auth.decorators';
 import { RecordContext, RecordsService } from './records.service';
 
-const ctxOf = ({ workspace, user }: AuthContext): RecordContext => ({ workspace, userId: user.id });
+const ctxOf = ({ workspace, user, viaApiKey }: AuthContext): RecordContext => ({
+  workspace,
+  userId: user.id,
+  source: viaApiKey ? 'api' : 'user',
+});
 
 /**
  * One controller for every object. When you're logged in, /api/docs lists concrete endpoints

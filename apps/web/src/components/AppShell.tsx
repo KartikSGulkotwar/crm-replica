@@ -1,9 +1,10 @@
-import { Home, Settings, Sparkles, Workflow } from 'lucide-react';
+import { Home, Search, Settings, Sparkles, Workflow } from 'lucide-react';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useObjects } from '../lib/metadata';
 import { useLogout, useSession } from '../lib/session';
 import { AgentPanel } from './agent/AgentPanel';
+import { CommandPalette } from './CommandPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ObjectIcon } from './ObjectIcon';
 import { ThemeToggle } from './ThemeToggle';
@@ -79,12 +80,19 @@ export function AppShell() {
   const close = () => setOpen(false);
   const [askOpen, setAskOpen] = useState(false);
   const closeAsk = useCallback(() => setAskOpen(false), []);
-  // Ctrl/⌘ + J opens and closes the assistant from anywhere.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+  // Ctrl/⌘ + J opens and closes the assistant, Ctrl/⌘ + K the command palette, from anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'j') {
         e.preventDefault();
         setAskOpen((v) => !v);
+      } else if (key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
       }
     };
     document.addEventListener('keydown', onKey);
@@ -111,7 +119,21 @@ export function AppShell() {
       <div className="mb-4 hidden px-2 pt-1 md:block">
         <Brand />
       </div>
-      <div className="mb-2">{askButton}</div>
+      <div className="mb-2 space-y-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            close();
+            setPaletteOpen(true);
+          }}
+          className="flex w-full items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-sm text-muted hover:border-accent hover:text-ink"
+        >
+          <Search aria-hidden className="size-4" />
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="hidden text-[10px] md:inline">⌘K</kbd>
+        </button>
+        {askButton}
+      </div>
       <NavItem
         to="/"
         end
@@ -164,6 +186,14 @@ export function AppShell() {
         <div className="flex items-center gap-1">
           <button
             type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Search"
+            className="rounded-lg p-1.5 text-muted hover:bg-raised hover:text-ink"
+          >
+            <Search aria-hidden className="size-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => setAskOpen(true)}
             aria-label="Ask the CRM"
             className="rounded-lg p-1.5 text-accent hover:bg-raised"
@@ -194,6 +224,15 @@ export function AppShell() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      {paletteOpen && (
+        <CommandPalette
+          onClose={closePalette}
+          onAsk={() => {
+            setPaletteOpen(false);
+            setAskOpen(true);
+          }}
+        />
+      )}
       {askOpen && (
         <ErrorBoundary resetKey="agent">
           <AgentPanel onClose={closeAsk} />

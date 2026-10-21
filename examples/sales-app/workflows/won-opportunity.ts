@@ -23,6 +23,8 @@ export default defineWorkflow({
         title: 'Kick off {{trigger.record.name}}',
         body: 'Won on {{trigger.occurredAt}}. Plan the onboarding with the customer.',
         status: 'TO_DO',
+        // Link the task to the deal so it shows on the deal's page.
+        targets: [{ object: 'opportunity', id: '{{trigger.record.id}}' }],
       },
     },
     {

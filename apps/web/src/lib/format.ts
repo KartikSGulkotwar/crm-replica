@@ -57,3 +57,24 @@ export function linkLabel(value: string): string {
 export function optionFor(field: FieldMetadataDto, value: unknown): SelectOption | undefined {
   return field.options?.find((o) => o.value === value);
 }
+
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 3600],
+  ['month', 30 * 24 * 3600],
+  ['week', 7 * 24 * 3600],
+  ['day', 24 * 3600],
+  ['hour', 3600],
+  ['minute', 60],
+];
+
+/** "5 minutes ago", "in 2 days", "just now". */
+export function formatRelative(iso: string, now = Date.now()): string {
+  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  if (Math.abs(seconds) < 45) return 'just now';
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (Math.abs(seconds) >= size || unit === 'minute')
+      return rtf.format(Math.round(seconds / size), unit);
+  }
+  return 'just now';
+}
