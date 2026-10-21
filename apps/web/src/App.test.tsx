@@ -77,6 +77,41 @@ describe('App routing and auth', () => {
     );
   });
 
+  it('shows the public demo login on the demo server and logs in with one click', async () => {
+    let loggedIn = false;
+    const logins: unknown[] = [];
+    mockApi({
+      'GET /auth/me': () => (loggedIn ? { body: adminSession } : { status: 401, body: {} }),
+      'GET /auth/demo': {
+        body: { enabled: true, email: 'demo@example.com', password: 'try-the-demo' },
+      },
+      'POST /auth/login': (init) => {
+        logins.push(JSON.parse(String(init?.body)));
+        loggedIn = true;
+        return { body: adminSession };
+      },
+      'GET /workspace/members': members,
+      'GET /workspace/invite-link': { body: { token: 't', url: 'http://localhost:5173/invite/t' } },
+    });
+    renderApp(<App />, { route: '/login?next=%2Fsettings%2Fmembers' });
+    const card = (await screen.findByRole('heading', { name: 'Try the demo' })).closest('section')!;
+    expect(card).toHaveTextContent('demo@example.com');
+    expect(card).toHaveTextContent('try-the-demo');
+    await userEvent.click(screen.getByRole('button', { name: 'Log in to the demo' }));
+    expect(await screen.findByLabelText('Invite link')).toBeInTheDocument();
+    expect(logins).toEqual([{ email: 'demo@example.com', password: 'try-the-demo' }]);
+  });
+
+  it('shows no demo card on a normal server', async () => {
+    mockApi({
+      'GET /auth/me': { status: 401, body: {} },
+      'GET /auth/demo': { body: { enabled: false } },
+    });
+    renderApp(<App />, { route: '/login' });
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Try the demo')).toBeNull());
+  });
+
   it('gives admins the invite link and role controls', async () => {
     mockApi({
       'GET /auth/me': { body: adminSession },

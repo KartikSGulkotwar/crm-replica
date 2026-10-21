@@ -4,6 +4,12 @@ export const QUEUES = {
   SYSTEM: 'system',
   /** Workflow runs (and their scheduled triggers). */
   WORKFLOWS: 'workflows',
+  /** Scheduled upkeep run by the API, e.g. rebuilding the public demo workspace. */
+  MAINTENANCE: 'maintenance',
+} as const;
+
+export const MAINTENANCE_JOBS = {
+  DEMO_RESET: 'demo-reset',
 } as const;
 
 export const WORKFLOW_JOBS = {

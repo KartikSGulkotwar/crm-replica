@@ -11,6 +11,9 @@ export function redisOptionsFromUrl(url: string): RedisOptions {
     password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
     db: Number.isInteger(db) ? db : undefined,
     tls: parsed.protocol === 'rediss:' ? {} : undefined,
+    // Look up both IPv4 and IPv6 addresses: Railway's private network (redis.railway.internal)
+    // is IPv6-only, and ioredis only tries IPv4 by default.
+    family: 0,
     // Required by BullMQ for blocking connections.
     maxRetriesPerRequest: null,
   };

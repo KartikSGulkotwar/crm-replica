@@ -1,89 +1,84 @@
 # CRM Replica
 
-A customizable, metadata-driven CRM: keep companies, people and deals, and change the data model
-itself (custom objects, fields, saved views, workflows and an AI agent).
+**A CRM whose data model is yours to change.** Add custom objects and fields in the browser or
+as code, view them as tables or kanban boards, automate them with workflows, and ask an AI
+assistant about them.
+
+**Live demo:** _coming soon_ · demo login `demo@example.com` / `try-the-demo` (shown on the
+login page; the demo workspace is rebuilt every night)
 
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 11 of 12 (polish). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+| Create a custom object                                        | Kanban view                                                                                    |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| ![New object dialog](docs/images/custom-object.png)           | ![Kanban pipeline](docs/images/kanban.png)                                                     |
+| **A workflow run**                                            | **Ask the CRM**                                                                                |
+| ![Workflow run with each step](docs/images/workflow-run.png)  | ![The assistant answering a question with links to the records it used](docs/images/agent.png) |
+| **Record timeline**                                           | **⌘K search**                                                                                  |
+| ![Timeline on a record page](docs/images/record-timeline.png) | ![Command palette](docs/images/command-palette.png)                                            |
 
-## Done so far
+<img src="docs/images/phone-kanban.png" alt="The kanban board on a phone" width="260" align="right">
 
-- **Phase 1:** monorepo, API, worker, web app, Docker, CI, live health check.
-- **Phase 2:** sign up (creates a workspace with its own Postgres schema, `workspace_<id>`, and
-  makes you admin), log in / log out with an httpOnly JWT cookie, admin and member roles, one
-  invite link per workspace (admins can reset it), Settings → General and Members, rate-limited
-  auth endpoints.
-- **Phase 3:** objects and fields are data (`core.object_metadata`, `core.field_metadata`), and
-  schema-sync turns them into real Postgres tables and columns in each workspace's schema. New
-  workspaces get Company, Person, Opportunity, Note and Task. Metadata API at `/api/metadata`
-  (objects, fields, soft delete → restore → permanent delete, `/api/metadata/export`). All 13
-  field types; relations get a foreign key and show up in reverse on the target object.
-- **Phase 4:** records API for every object at `/api/objects/{plural}` (list, get, create, update,
-  soft delete, restore). JSON filter trees (`and` / `or` / `not`, operators per field type),
-  multi-field sort, cursor pagination, `?expand=` for relations in both directions,
-  `record.created/updated/deleted/restored` events, and `/api/docs` generated live from your
-  workspace's data model.
-- **Phase 5:** the CRM screens. The sidebar lists your objects; each object has a spreadsheet-style
-  table with in-place editing for every field type (select chips, stars, currency, dates,
-  linked-record picker), resizable and reorderable columns, infinite scroll, row selection
-  with bulk delete, and a "New record" dialog. Record pages show every field plus linked
-  records from both directions.
-- **Phase 6:** saved views (`core.view`, `view_field`, `view_filter`, `view_sort`; API at
-  `/api/views`). Each object has a default view; you can add more. Filter builder (match all/any,
-  operators per field type), sort builder, show/hide and reorder fields, column widths and
-  order saved to the view, and a kanban board grouped by a select field with drag and drop
-  between and within columns.
-- **Phase 7:** Settings → Data model. Create custom objects (names, API names, icon) and add,
-  edit or delete fields of all 13 types from the browser: select options with colors, rating
-  size, default currency, relations (target object, reverse name, on-delete behaviour),
-  required, default values. Deleted objects and fields can be restored or removed for good.
-  Changes show up immediately in the sidebar, tables and kanban.
-- **Phase 8:** objects as code. `@crm-replica/sdk` (`defineObject`, `defineField`, `defineView`),
-  the `crm` CLI (`init`, `validate`, `diff`, `push`, `pull`), workspace API keys (Settings → API
-  keys, `Authorization: Bearer crm_…`), `POST /api/metadata/apply` (plan + apply in one
-  transaction), and `examples/sales-app`.
-- **Phase 9:** workflows. Triggers (record created / updated, optionally only for certain
-  fields and conditions / deleted, manual button, cron schedule) and steps (create, update and
-  find records, send email, HTTP request, wait, if/else) with `{{variables}}`. Record events go
-  through a BullMQ queue to the worker, which runs steps with retries and exponential backoff,
-  resumes after failures and delays, and stops automation loops at depth 5. Draft → publish
-  versioning, run history with each step's input / output / errors, a step editor with a
-  variable picker, test runs, and `defineWorkflow` for workflows as code.
-- **Phase 10:** the AI assistant. **Ask the CRM** (sidebar button or ⌘/Ctrl+J) opens a side
-  panel on every page. Claude answers using tools generated from the workspace's data model
-  (`list_objects`, `describe_object`, `search_records`, `get_record`, `create_record`,
-  `update_record`) and runs them as the signed-in user, so it sees only what that user can.
-  Answers stream in and link to the records they used. Any create or update is only proposed:
-  nothing changes until you click **Approve** (or pick which of several changes to apply).
-  Conversations are saved per user. Workflows get an **Ask AI** step that summarises, writes or
-  classifies (into a select field's options or your own list) and can save the answer to a field.
-- **Phase 11:** polish. Notes and tasks can be linked to any records (create them from a record
-  page, or with `"targets": [{"object": "company", "id": "…"}]` in the API, a workflow or the
-  assistant). Every record page has a **timeline** of who changed what (before → after, with
-  readable values), including changes made by workflows, API keys and the assistant. **⌘K / Ctrl+K**
-  opens a command palette that searches records of every object plus pages and actions. Home
-  shows recent activity and your open tasks. Admins can add **demo data** (30 companies, 60
-  people, 40 opportunities, with notes and tasks) once per workspace from Home or Settings →
-  General. All API requests are rate-limited per user (`API_RATE_LIMIT`, default 600 per minute,
-  counted in Redis); every page was checked at phone width.
+## What it does
 
-## What's in the repo
+- **Metadata-driven data model.** Objects and fields are data. Creating an object creates a real
+  Postgres table; adding a field adds a column. 13 field types: text, number, currency, checkbox,
+  date, date-time, select, multi-select, email, phone, link, rating, relation (with the reverse
+  side shown on the other object). Companies, People, Opportunities, Notes and Tasks come built
+  in; you can add fields to them and create your own objects in **Settings → Data model**.
+- **Records API for every object**, generated from the data model: filter trees (`and` / `or` /
+  `not`, operators per field type), multi-field sort, cursor pagination, `?expand=` relations,
+  and OpenAPI docs at `/api/docs` that always match your current objects.
+- **Tables and kanban.** Inline editing per field type, resizable / reorderable columns, infinite
+  scroll, bulk delete, saved views with filters and sorts, kanban boards with drag and drop.
+- **Record pages** with every field, related records, notes, tasks and a **timeline** of who
+  changed what (people, API keys, workflows and the assistant).
+- **Objects as code.** `defineObject` / `defineView` / `defineWorkflow` in TypeScript, and a `crm`
+  CLI that diffs and pushes them like a database migration.
+- **Workflows.** Triggers (record created / updated / deleted, manual button, cron schedule) and
+  steps (create / update / find records, send email, HTTP request, wait, if / else, **AI step**)
+  with `{{variables}}`. Runs execute in a background worker with retries, versions and a run
+  history showing each step's input, output and errors.
+- **Ask the CRM** (⌘J). A Claude-powered assistant with tools generated from your data model.
+  It reads as you, links to the records it used, and **asks before changing anything**.
+- **⌘K command palette**, a home feed of recent activity and your open tasks, light and dark
+  themes, and a layout that works on phones.
+- **Workspaces** with admin / member roles, invite links, API keys and rate limits.
 
-| Path                 | What it is                                                                   |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `apps/server`        | NestJS API (`/api`), OpenAPI docs at `/api/docs`, serves the web app in prod |
-| `apps/worker`        | BullMQ worker process; reuses the server's compiled modules                  |
-| `apps/web`           | React 18 + Vite + Tailwind + TanStack Query                                  |
-| `packages/shared`    | Types and constants shared by everything (`FieldType`, queue names, …)       |
-| `packages/sdk`       | `defineObject` / `defineField` / `defineView` for objects as code            |
-| `packages/cli`       | The `crm` command: `init`, `validate`, `diff`, `push`, `pull`                |
-| `examples/sales-app` | A Deal object, a kanban view and a table view, defined as code               |
+## Architecture
+
+```mermaid
+flowchart LR
+  Web["React app<br/>(Vite, TanStack Query)"] -->|"REST + SSE /api"| API
+  CLI["crm CLI + SDK"] -->|"API key"| API
+
+  subgraph API["NestJS API (web service, also serves the React app)"]
+    direction TB
+    Meta["Metadata API"]
+    Sync["schema-sync"]
+    Records["Records API<br/>(safe SQL builder)"]
+    Agents["Ask the CRM<br/>(Claude tool calling)"]
+    Flows["Workflows API"]
+  end
+
+  API --> PG[("Postgres<br/>core.* metadata<br/>+ one schema per workspace")]
+  API -->|"record events → jobs"| Redis[("Redis / BullMQ")]
+  Redis --> Worker["Worker<br/>(workflow runs)"]
+  Worker --> PG
+  Agents --> Claude["Claude API"]
+  Worker -->|"AI step"| Claude
+```
+
+- **One Docker image, two processes:** `node apps/server/dist/main.js` (API + web app on one
+  URL, no CORS) and `node apps/worker/dist/main.js` (BullMQ worker). The worker is built from
+  the server's own modules, so both run the same records and workflow code.
+- **Postgres** holds the metadata (`core.*`) and each workspace's records in its own schema
+  (`workspace_<id>`). **Redis** carries the job queues and rate-limit counters.
 
 ## Objects as code
 
-Define objects, fields and views in TypeScript and sync them like a database migration.
+Define objects, fields, views and workflows in TypeScript and sync them like a migration.
 
 ```ts
 // examples/sales-app/objects/deal.ts
@@ -120,22 +115,61 @@ App sales-app → workspace Northwind at http://localhost:3000
   + Add field deal.company (Relation → company)
   + Create table view "Big deals" on deal
   + Create kanban view "Deal pipeline" on deal
+  + Create and publish workflow "Opportunity won: kickoff" (2 steps)
 
-4 to create, 0 to update, 0 to remove
+5 to create, 0 to update, 0 to remove
 
 $ crm push --yes
-✓ Applied 4 change(s) to the workspace.
+✓ Applied 5 change(s) to the workspace.
+
+$ crm diff
+No changes. The workspace already matches the app.
 ```
 
-- `crm diff` previews the plan. `crm push` applies it in **one transaction** (all or nothing).
+- `crm init` scaffolds an app, `crm validate` checks definitions, `crm diff` previews the plan,
+  `crm push` applies it in **one transaction** (all or nothing), `crm pull` writes the workspace
+  back to code.
 - Changes that delete data (removing a field or object, changing a field's type) are refused
   unless you pass `--allow-destructive`.
-- A push only removes what that app created. Fields and objects made in the UI are never
-  deleted by code, and matching UI-made objects are adopted.
-- `crm pull` writes the workspace's custom objects and views back to code.
+- A push only removes what that app created; objects and fields made in the UI are never
+  deleted by code.
 - Authenticate with an API key from **Settings → API keys** (`CRM_API_KEY` or the app's `.env`).
 
 See [examples/sales-app](examples/sales-app) to try it.
+
+## Design decisions
+
+**Metadata-driven schema, real tables.** Objects and fields live in `core.object_metadata` and
+`core.field_metadata`; schema-sync turns them into real tables and columns (`CREATE TABLE`,
+`ALTER TABLE ADD COLUMN`, foreign keys for relations) inside the same transaction as the
+metadata change. Records are therefore ordinary rows: Postgres types, indexes, constraints and
+joins all work, and there's no entity-attribute-value table to query around.
+
+**One Postgres schema per workspace.** Each workspace's tables live in `workspace_<id>`, which
+gives tenant isolation at the database level, lets two workspaces have different data models,
+and makes deleting a workspace a single `DROP SCHEMA`.
+
+**Safe dynamic SQL.** Table and column names come only from metadata and pass an identifier
+whitelist before being quoted; values are always bound parameters with explicit casts. Filters
+arrive as a JSON tree that is validated against the field's type and allowed operators, so
+user input never becomes SQL text. The filter builder has tests for injection attempts.
+
+**Event-driven workflows on BullMQ.** Every record change emits an event after it commits. A
+listener matches published workflows and queues a run; the worker executes it step by step,
+saving progress after each step so retries (exponential backoff) and delays resume where they
+stopped. Runs point at the workflow version they started with, and a depth counter on events
+stops a workflow that keeps re-triggering itself.
+
+**A tool-calling agent that asks before it writes.** Ask the CRM's tools (`list_objects`,
+`describe_object`, `search_records`, `get_record`, `create_record`, `update_record`) are
+generated from the workspace's data model and run through the same records service as the
+API, as the signed-in user. Reads run immediately; writes are validated, shown to the user as
+before → after cards, and only run after **Approve**. Answers stream over Server-Sent Events and
+link to the records the agent used.
+
+**History for everything.** The timeline is written from the same record events, in the API
+and the worker, so changes made by people, API keys, workflows and the assistant all show up,
+each labelled with who or what made them.
 
 ## Local setup (macOS)
 
@@ -148,12 +182,14 @@ docker compose up -d        # Postgres on :5432, Redis on :6379
 pnpm dev                    # API :3000, web :5173, worker, all with live reload
 ```
 
-Open http://localhost:5173 and click **Create a workspace**. The API runs database migrations on start.
+Open http://localhost:5173, click **Create a workspace**, then **Add demo data** on the home page
+for 30 companies, 60 people and 40 opportunities with notes and tasks. The API runs database
+migrations on start.
 
-To use the AI features, put an Anthropic API key in `.env` (`ANTHROPIC_API_KEY=sk-ant-…`) and
+For the AI features, put an Anthropic API key in `.env` (`ANTHROPIC_API_KEY=sk-ant-…`) and
 restart `pnpm dev`. Requests use `claude-opus-5-5` by default (`ANTHROPIC_MODEL`) with
-server-side refusal fallbacks enabled: if the model declines a request, the API retries it on
-Anthropic's recommended fallback model in the same call. Tests never call the real API.
+server-side refusal fallbacks: if the model declines, the API retries on Anthropic's
+recommended fallback model in the same call.
 
 Run everything in Docker instead (production-like, one URL on :3000):
 
@@ -161,16 +197,66 @@ Run everything in Docker instead (production-like, one URL on :3000):
 docker compose --profile full up --build
 ```
 
-## Scripts
+## Tests
 
-| Command          | Does                                                                                           |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `pnpm dev`       | Builds dependencies once, then runs all apps in watch mode                                     |
-| `pnpm test`      | All tests. Server e2e tests need `docker compose up -d` and use a separate `crm_test` database |
-| `pnpm lint`      | ESLint                                                                                         |
-| `pnpm typecheck` | TypeScript in every package                                                                    |
-| `pnpm build`     | Production build of every package                                                              |
-| `pnpm format`    | Prettier                                                                                       |
+```bash
+pnpm test        # everything (server e2e tests need `docker compose up -d`)
+```
 
-CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck, tests (with Postgres and Redis
-service containers) and build, and checks that the Docker image builds.
+About 490 tests: unit tests (filter builder incl. SQL-injection attempts, value codec, sort
+cursors, workflow validator, demo data), server end-to-end tests against a real Postgres and
+Redis (schema-sync for every field type, records API, views, objects-as-code apply, workflow
+runs through a real BullMQ worker with retries and delays, the agent's tool loop and approval
+flow with a scripted model, timeline, search, rate limits, demo mode), web component tests
+(Vitest + Testing Library) and CLI tests. Tests never call the real Claude API.
+
+CI (`.github/workflows/ci.yml`) runs lint, format check, typecheck, tests (with Postgres and
+Redis service containers) and build, and checks that the Docker image builds.
+
+| Command          | Does                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `pnpm dev`       | Builds dependencies once, then runs all apps in watch mode |
+| `pnpm test`      | All tests                                                  |
+| `pnpm lint`      | ESLint                                                     |
+| `pnpm typecheck` | TypeScript in every package                                |
+| `pnpm build`     | Production build of every package                          |
+| `pnpm format`    | Prettier                                                   |
+
+## Deployment
+
+Railway runs it as two services from one image plus Postgres and Redis. Step by step:
+**[docs/deploy-railway.md](docs/deploy-railway.md)** (`railway/web.json` and
+`railway/worker.json` hold each service's start command).
+
+| Variable                                   | What it's for                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| `DATABASE_URL`, `REDIS_URL`                | Postgres and Redis                                                     |
+| `JWT_SECRET`                               | Signs session cookies (required in production, 32+ characters)         |
+| `APP_URL`                                  | The public address (invite links; secure cookies when it's `https://`) |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`     | Ask the CRM and the workflow AI step                                   |
+| `DEMO_MODE`, `DEMO_EMAIL`, `DEMO_PASSWORD` | Public demo workspace with its login on the login page                 |
+| `DEMO_RESET_CRON`                          | When the demo is rebuilt (default `0 3 * * *`, UTC)                    |
+| `AUTH_RATE_LIMIT`, `API_RATE_LIMIT`        | Requests per minute: sign-up / login per IP, everything else per user  |
+| `AGENT_RATE_LIMIT`, `AGENT_DAILY_LIMIT`    | Assistant questions per user per minute and per day                    |
+| `RESEND_API_KEY`, `EMAIL_FROM`             | Send workflow emails (otherwise they're logged)                        |
+
+See [.env.example](.env.example) for all of them with defaults.
+
+## What's in the repo
+
+| Path                 | What it is                                                                   |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `apps/server`        | NestJS API (`/api`), OpenAPI docs at `/api/docs`, serves the web app in prod |
+| `apps/worker`        | BullMQ worker process; reuses the server's compiled modules                  |
+| `apps/web`           | React 18 + Vite + Tailwind + TanStack Query                                  |
+| `packages/shared`    | Types, schemas and constants shared by everything                            |
+| `packages/sdk`       | `defineObject` / `defineField` / `defineView` / `defineWorkflow`             |
+| `packages/cli`       | The `crm` command: `init`, `validate`, `diff`, `push`, `pull`                |
+| `examples/sales-app` | A Deal object, a kanban and a table view, and a workflow, defined as code    |
+| `docs`               | Deployment guide and screenshots                                             |
+
+The project was built in 12 phases from [TWENTY_SPEC.md](TWENTY_SPEC.md).
+
+## Credit
+
+Inspired by Twenty (twentyhq/twenty). Independent implementation; no Twenty code used.

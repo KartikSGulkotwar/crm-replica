@@ -17,6 +17,7 @@ import { AgentsModule } from './agents/agents.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { SearchModule } from './search/search.module';
 import { DemoDataModule } from './demo/demo-data.module';
+import { DemoWorkspaceModule } from './demo/demo-workspace.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 
@@ -48,6 +49,7 @@ const staticModules = existsSync(webDist)
     TimelineModule,
     SearchModule,
     DemoDataModule,
+    DemoWorkspaceModule,
     ...staticModules,
   ],
 })

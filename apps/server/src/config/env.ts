@@ -32,6 +32,20 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   /** API requests per user (or API key / IP) per minute. */
   API_RATE_LIMIT: z.coerce.number().int().positive().default(600),
+  /** Messages to the AI assistant per user per day (0 = no daily limit). */
+  AGENT_DAILY_LIMIT: z.coerce.number().int().min(0).default(0),
+  /**
+   * Public demo: keeps a workspace with demo data that anyone can log into (the login is shown
+   * on the login page) and rebuilds it on a schedule.
+   */
+  DEMO_MODE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  DEMO_EMAIL: z.string().email().default('demo@example.com'),
+  DEMO_PASSWORD: z.string().min(8).default('try-the-demo'),
+  /** When to rebuild the demo workspace (cron, UTC). Default: every night at 03:00. */
+  DEMO_RESET_CRON: z.string().default('0 3 * * *'),
 });
 
 const DEV_JWT_SECRET = 'dev-only-insecure-jwt-secret-change-me';

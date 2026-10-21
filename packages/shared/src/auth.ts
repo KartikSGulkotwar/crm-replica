@@ -59,3 +59,6 @@ export interface CreatedApiKeyDto extends ApiKeyDto {
 }
 
 export const API_KEY_PREFIX = 'crm_';
+
+/** GET /api/auth/demo: the public demo login, shown on the login page when DEMO_MODE is on. */
+export type DemoLoginDto = { enabled: false } | { enabled: true; email: string; password: string };

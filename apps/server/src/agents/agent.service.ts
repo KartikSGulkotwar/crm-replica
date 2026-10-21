@@ -461,14 +461,27 @@ export class AgentService {
 
   /** Per-user limit on assistant requests (shared across API instances via Redis). */
   private async rateLimit(userId: string) {
-    const key = `${loadEnv().BULLMQ_PREFIX}:agent-rate:${userId}:${Math.floor(Date.now() / 60_000)}`;
+    const env = loadEnv();
+    const key = `${env.BULLMQ_PREFIX}:agent-rate:${userId}:${Math.floor(Date.now() / 60_000)}`;
     const count = await this.redis.incr(key);
     if (count === 1) await this.redis.expire(key, 70);
-    if (count > loadEnv().AGENT_RATE_LIMIT) {
+    if (count > env.AGENT_RATE_LIMIT) {
       throw new HttpException(
         'You’re sending messages too quickly. Please wait a minute.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
+    }
+    // Optional daily cap, e.g. for a public demo where everyone shares one login.
+    if (env.AGENT_DAILY_LIMIT > 0) {
+      const day = `${env.BULLMQ_PREFIX}:agent-day:${userId}:${new Date().toISOString().slice(0, 10)}`;
+      const today = await this.redis.incr(day);
+      if (today === 1) await this.redis.expire(day, 2 * 24 * 3600);
+      if (today > env.AGENT_DAILY_LIMIT) {
+        throw new HttpException(
+          'The assistant has answered as many questions as it can today. Please try again tomorrow.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
     }
   }
 
