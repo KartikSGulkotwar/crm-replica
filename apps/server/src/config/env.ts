@@ -23,6 +23,11 @@ const envSchema = z.object({
   /** Send workflow emails through Resend; without it, emails are only logged. */
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('CRM Replica <onboarding@resend.dev>'),
+  /** Enables the AI assistant and the workflow AI step. */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
+  /** Messages to the AI assistant allowed per user per minute. */
+  AGENT_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   /** Sign-up / login / accept-invite attempts allowed per IP per minute. */
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
 });

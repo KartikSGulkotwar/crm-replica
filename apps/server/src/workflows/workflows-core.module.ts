@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { QUEUES } from '@crm-replica/shared';
 import { RecordsModule } from '../records/records.module';
 import { WorkspaceEntity } from '../workspace/workspace.entity';
+import { AiStepService } from './engine/ai-step.service';
 import { EmailService } from './engine/email.service';
 import { HttpStepService } from './engine/http-step.service';
 import { WorkflowEngine } from './engine/workflow-engine.service';
@@ -31,6 +32,7 @@ import { WorkflowTriggerListener } from './workflow-trigger.listener';
     WorkflowEngine,
     EmailService,
     HttpStepService,
+    AiStepService,
   ],
   exports: [
     TypeOrmModule,

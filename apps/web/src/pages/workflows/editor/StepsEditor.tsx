@@ -4,7 +4,7 @@ import type {
   WorkflowDefinition,
   WorkflowStep,
 } from '@crm-replica/shared';
-import { FIELD_TYPE_INFO, flattenSteps, StepType } from '@crm-replica/shared';
+import { FIELD_TYPE_INFO, FieldType, flattenSteps, StepType } from '@crm-replica/shared';
 import {
   ArrowDown,
   ArrowUp,
@@ -15,6 +15,7 @@ import {
   Mail,
   PencilLine,
   Plus,
+  Sparkles,
   SquarePlus,
   Trash2,
   X,
@@ -64,6 +65,12 @@ export const STEP_TYPES: { type: StepType; label: string; description: string; i
       icon: <Globe aria-hidden className="size-4" />,
     },
     {
+      type: StepType.AI,
+      label: 'Ask AI',
+      description: 'Summarise, write or classify',
+      icon: <Sparkles aria-hidden className="size-4" />,
+    },
+    {
       type: StepType.DELAY,
       label: 'Wait',
       description: 'Pause before the next step',
@@ -111,6 +118,16 @@ function newStep(type: StepType, definition: WorkflowDefinition): WorkflowStep {
       };
     case StepType.DELAY:
       return { id, name, type, seconds: 3600 };
+    case StepType.AI:
+      return {
+        id,
+        name,
+        type,
+        prompt:
+          'object' in definition.trigger && definition.trigger.object
+            ? 'Summarise this record in one sentence:\n{{trigger.record}}'
+            : '',
+      };
     case StepType.IF_ELSE:
       return {
         id,
@@ -404,6 +421,8 @@ function StepForm({
     case StepType.HTTP_REQUEST: {
       return <HttpForm step={step} onChange={onChange} groups={groups} />;
     }
+    case StepType.AI:
+      return <AiForm step={step} onChange={onChange} groups={groups} objects={objects} />;
     case StepType.DELAY: {
       const unit =
         [...DELAY_UNITS].find((u) => step.seconds % u.seconds === 0 && u.seconds > 1) ??
@@ -458,6 +477,123 @@ function StepForm({
         </Labeled>
       );
   }
+}
+
+const AI_FIELD_TYPES = [FieldType.TEXT, FieldType.SELECT];
+
+function AiForm({
+  step,
+  onChange,
+  groups,
+  objects,
+}: {
+  step: Extract<WorkflowStep, { type: StepType.AI }>;
+  onChange: (s: WorkflowStep) => void;
+  groups: VariableGroup[];
+  objects: ObjectMetadataDto[];
+}) {
+  const [choicesText, setChoicesText] = useState((step.choices ?? []).join(', '));
+  const output = step.output;
+  const object = output
+    ? objects.find((o) => o.nameSingular === output.object || o.namePlural === output.object)
+    : undefined;
+  const fields = object?.fields.filter((f) => AI_FIELD_TYPES.includes(f.type)) ?? [];
+  const field = fields.find((f) => f.name === output?.field);
+  const saveChoices = (text: string) => {
+    setChoicesText(text);
+    const choices = [
+      ...new Set(
+        text
+          .split(',')
+          .map((c) => c.trim())
+          .filter(Boolean),
+      ),
+    ];
+    onChange({ ...step, choices: choices.length ? choices : undefined });
+  };
+  return (
+    <div className="space-y-3">
+      <Labeled
+        label="Instructions"
+        hint="What the AI should do. Insert variables to give it the record’s details."
+      >
+        <TemplateInput
+          label="Instructions"
+          value={step.prompt}
+          onChange={(prompt) => onChange({ ...step, prompt })}
+          groups={groups}
+          multiline
+          placeholder="Summarise this company in one sentence: {{trigger.record}}"
+        />
+      </Labeled>
+      <Labeled
+        label="Allowed answers (optional)"
+        hint={
+          field?.type === FieldType.SELECT
+            ? `Leave empty to choose from ${field.label}’s options. Separate answers with commas.`
+            : 'To classify, list the answers it may give, separated by commas.'
+        }
+      >
+        <input
+          aria-label="Allowed answers"
+          value={choicesText}
+          onChange={(e) => saveChoices(e.target.value)}
+          placeholder="e.g. Hot, Warm, Cold"
+          className={inputClass}
+        />
+      </Labeled>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ObjectSelect
+          label="Save the answer to"
+          value={output?.object}
+          objects={objects}
+          allowNone="Don’t save it"
+          onChange={(name) => {
+            if (!name) return onChange({ ...step, output: undefined });
+            const target = objects.find((o) => o.nameSingular === name);
+            const first = target?.fields.find((f) => AI_FIELD_TYPES.includes(f.type));
+            onChange({
+              ...step,
+              output: {
+                object: name,
+                recordId: output?.recordId ?? '{{trigger.record.id}}',
+                field: first?.name ?? '',
+              },
+            });
+          }}
+        />
+        {output && (
+          <>
+            <Labeled label="Record (id)">
+              <TemplateInput
+                label="Record id"
+                value={output.recordId}
+                onChange={(recordId) => onChange({ ...step, output: { ...output, recordId } })}
+                groups={groups}
+              />
+            </Labeled>
+            <Labeled label="Field">
+              <select
+                aria-label="Field"
+                value={output.field}
+                onChange={(e) =>
+                  onChange({ ...step, output: { ...output, field: e.target.value } })
+                }
+                className={inputClass}
+              >
+                {fields.length === 0 && <option value="">No text or select fields</option>}
+                {fields.map((f) => (
+                  <option key={f.name} value={f.name}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </Labeled>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function HttpForm({

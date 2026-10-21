@@ -100,6 +100,8 @@ export enum StepType {
   HTTP_REQUEST = 'HTTP_REQUEST',
   DELAY = 'DELAY',
   IF_ELSE = 'IF_ELSE',
+  /** Ask Claude to summarise or classify; optionally write the answer to a field. */
+  AI = 'AI',
 }
 
 /** Field values for record steps; strings may use variables (a lone `{{x}}` keeps its type). */
@@ -155,6 +157,21 @@ const httpStep = z
     body: z.unknown().optional(),
   })
   .strict();
+const aiStep = z
+  .object({
+    ...base,
+    type: z.literal(StepType.AI),
+    /** Instructions for the model; may use variables (e.g. the trigger record). */
+    prompt: template.min(1),
+    /** Classify: the answer must be exactly one of these (e.g. a select field's option values). */
+    choices: z.array(z.string().min(1).max(100)).min(2).max(50).optional(),
+    /** Optionally write the answer to a field of a record. */
+    output: z
+      .object({ object: apiNameSchema, recordId: template.min(1), field: apiNameSchema })
+      .strict()
+      .optional(),
+  })
+  .strict();
 const delayStep = z
   .object({
     ...base,
@@ -174,6 +191,7 @@ export type WorkflowStep =
   | z.output<typeof sendEmailStep>
   | z.output<typeof httpStep>
   | z.output<typeof delayStep>
+  | z.output<typeof aiStep>
   | IfElseStep;
 
 /** What an author may write (defaults such as `values: {}` or `limit` can be left out). */
@@ -184,6 +202,7 @@ export type WorkflowStepInput =
   | z.input<typeof sendEmailStep>
   | z.input<typeof httpStep>
   | z.input<typeof delayStep>
+  | z.input<typeof aiStep>
   | {
       id: string;
       name: string;
@@ -210,6 +229,7 @@ export const stepSchema: z.ZodType<WorkflowStep, unknown> = z.lazy(() =>
     sendEmailStep,
     httpStep,
     delayStep,
+    aiStep,
     z
       .object({
         ...base,

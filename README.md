@@ -6,7 +6,7 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
 > Inspired by [Twenty](https://github.com/twentyhq/twenty) (twentyhq/twenty). Independent
 > implementation; no Twenty code used.
 
-**Status:** Phase 9 of 12 (workflows). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
+**Status:** Phase 10 of 12 (AI assistant). Phases 1–8 are the MVP. See [TWENTY_SPEC.md](TWENTY_SPEC.md) for the full plan.
 
 ## Done so far
 
@@ -51,6 +51,14 @@ itself (custom objects, fields, saved views, workflows and an AI agent).
   resumes after failures and delays, and stops automation loops at depth 5. Draft → publish
   versioning, run history with each step's input / output / errors, a step editor with a
   variable picker, test runs, and `defineWorkflow` for workflows as code.
+- **Phase 10:** the AI assistant. **Ask the CRM** (sidebar button or ⌘/Ctrl+J) opens a side
+  panel on every page. Claude answers using tools generated from the workspace's data model
+  (`list_objects`, `describe_object`, `search_records`, `get_record`, `create_record`,
+  `update_record`) and runs them as the signed-in user, so it sees only what that user can.
+  Answers stream in and link to the records they used. Any create or update is only proposed:
+  nothing changes until you click **Approve** (or pick which of several changes to apply).
+  Conversations are saved per user. Workflows get an **Ask AI** step that summarises, writes or
+  classifies (into a select field's options or your own list) and can save the answer to a field.
 
 ## What's in the repo
 
@@ -132,6 +140,11 @@ pnpm dev                    # API :3000, web :5173, worker, all with live reload
 ```
 
 Open http://localhost:5173 and click **Create a workspace**. The API runs database migrations on start.
+
+To use the AI features, put an Anthropic API key in `.env` (`ANTHROPIC_API_KEY=sk-ant-…`) and
+restart `pnpm dev`. Requests use `claude-opus-5-5` by default (`ANTHROPIC_MODEL`) with
+server-side refusal fallbacks enabled: if the model declines a request, the API retries it on
+Anthropic's recommended fallback model in the same call. Tests never call the real API.
 
 Run everything in Docker instead (production-like, one URL on :3000):
 

@@ -1,8 +1,9 @@
-import { Home, Settings, Workflow } from 'lucide-react';
-import { ReactNode, useState } from 'react';
+import { Home, Settings, Sparkles, Workflow } from 'lucide-react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useObjects } from '../lib/metadata';
 import { useLogout, useSession } from '../lib/session';
+import { AgentPanel } from './agent/AgentPanel';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ObjectIcon } from './ObjectIcon';
 import { ThemeToggle } from './ThemeToggle';
@@ -76,12 +77,41 @@ export function AppShell() {
   const objects = useObjects();
   const location = useLocation();
   const close = () => setOpen(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const closeAsk = useCallback(() => setAskOpen(false), []);
+  // Ctrl/⌘ + J opens and closes the assistant from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setAskOpen((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  const askButton = (
+    <button
+      type="button"
+      onClick={() => {
+        close();
+        setAskOpen((v) => !v);
+      }}
+      aria-expanded={askOpen}
+      className="flex w-full items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-sm hover:border-accent hover:text-accent"
+    >
+      <Sparkles aria-hidden className="size-4 text-accent" />
+      <span className="flex-1 text-left">Ask the CRM</span>
+      <kbd className="hidden text-[10px] text-muted md:inline">⌘J</kbd>
+    </button>
+  );
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-0.5 overflow-y-auto p-3" aria-label="Main">
       <div className="mb-4 hidden px-2 pt-1 md:block">
         <Brand />
       </div>
+      <div className="mb-2">{askButton}</div>
       <NavItem
         to="/"
         end
@@ -131,15 +161,25 @@ export function AppShell() {
       {/* Phone: top bar with a menu button. Desktop: fixed sidebar. */}
       <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 md:hidden">
         <Brand />
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          className="rounded-lg px-2 py-1 text-sm hover:bg-raised"
-        >
-          {open ? 'Close' : 'Menu'}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setAskOpen(true)}
+            aria-label="Ask the CRM"
+            className="rounded-lg p-1.5 text-accent hover:bg-raised"
+          >
+            <Sparkles aria-hidden className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            className="rounded-lg px-2 py-1 text-sm hover:bg-raised"
+          >
+            {open ? 'Close' : 'Menu'}
+          </button>
+        </div>
       </header>
       {open && (
         <div id="mobile-nav" className="border-b border-line bg-surface md:hidden">
@@ -154,6 +194,11 @@ export function AppShell() {
           <Outlet />
         </ErrorBoundary>
       </main>
+      {askOpen && (
+        <ErrorBoundary resetKey="agent">
+          <AgentPanel onClose={closeAsk} />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

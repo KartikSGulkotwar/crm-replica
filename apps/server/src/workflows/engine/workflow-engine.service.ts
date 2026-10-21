@@ -14,6 +14,7 @@ import { RecordContext, RecordsService } from '../../records/records.service';
 import { WorkspaceModelService } from '../../records/workspace-model.service';
 import { WorkspaceEntity } from '../../workspace/workspace.entity';
 import { WorkflowRunEntity } from '../workflow.entities';
+import { AiStepInput, AiStepService } from './ai-step.service';
 import { EmailService } from './email.service';
 import { HttpStepService } from './http-step.service';
 import { PermanentStepError, RetryableStepError, WaitSignal } from './step-errors';
@@ -47,6 +48,7 @@ export class WorkflowEngine {
     private readonly models: WorkspaceModelService,
     private readonly email: EmailService,
     private readonly http: HttpStepService,
+    private readonly ai: AiStepService,
   ) {}
 
   async execute(run: WorkflowRunEntity, definition: WorkflowDefinition): Promise<void> {
@@ -202,6 +204,8 @@ export class WorkflowEngine {
           headers: (input.headers as Record<string, unknown>) ?? {},
           body: input.body,
         });
+      case StepType.AI:
+        return this.ai.run(input as unknown as AiStepInput, ctx);
       case StepType.IF_ELSE: {
         const matched = evaluateConditions(step.condition, context);
         return { matched, branch: matched ? 'then' : 'else' };

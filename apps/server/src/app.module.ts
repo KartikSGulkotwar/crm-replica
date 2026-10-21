@@ -12,6 +12,8 @@ import { RecordsModule } from './records/records.module';
 import { ViewsModule } from './views/views.module';
 import { AppsModule } from './apps/apps.module';
 import { WorkflowsModule } from './workflows/workflows.module';
+import { LlmModule } from './llm/llm.module';
+import { AgentsModule } from './agents/agents.module';
 import { RedisModule } from './redis/redis.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 
@@ -38,6 +40,8 @@ const staticModules = existsSync(webDist)
     ViewsModule,
     AppsModule,
     WorkflowsModule,
+    LlmModule,
+    AgentsModule,
     ...staticModules,
   ],
 })

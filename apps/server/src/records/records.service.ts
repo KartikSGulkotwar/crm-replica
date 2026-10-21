@@ -159,6 +159,26 @@ export class RecordsService {
     return record;
   }
 
+  /**
+   * Checks a create/update body exactly as the real call would (values, required fields,
+   * linked records) without writing anything. Used to vet changes before asking for approval.
+   */
+  async validate(
+    ctx: RecordContext,
+    plural: string,
+    body: unknown,
+    mode: 'create' | 'update',
+    id?: string,
+  ): Promise<void> {
+    const { model, object } = await this.models.object(ctx.workspace, plural);
+    assertWritable(object);
+    await this.wrap(async () => {
+      if (mode === 'update') await this.findRow(this.dataSource.manager, model, object, id ?? '');
+      const input = parseRecordInput(object, body, mode);
+      await this.assertRelationTargets(this.dataSource.manager, model, input.relationIds);
+    });
+  }
+
   async update(ctx: RecordContext, plural: string, id: string, body: unknown): Promise<RecordDto> {
     const { model, object } = await this.models.object(ctx.workspace, plural);
     assertWritable(object);

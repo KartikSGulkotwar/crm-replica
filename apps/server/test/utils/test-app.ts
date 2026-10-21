@@ -14,7 +14,13 @@ export interface TestApp {
  * Boots the real AppModule (migrations included) against the test database. Modules are
  * required lazily so a test file can change process.env first.
  */
-export async function createTestApp(opts: { withWorker?: boolean } = {}): Promise<TestApp> {
+export async function createTestApp(
+  opts: {
+    withWorker?: boolean;
+    /** Replace providers with test doubles, e.g. `[[LlmClient, fakeLlm]]`. */
+    overrides?: [token: unknown, value: unknown][];
+  } = {},
+): Promise<TestApp> {
   Logger.overrideLogger(['error']);
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { AppModule } = require('../../src/app.module');
@@ -25,7 +31,10 @@ export async function createTestApp(opts: { withWorker?: boolean } = {}): Promis
     ? // eslint-disable-next-line @typescript-eslint/no-require-imports
       [AppModule, require('../../src/workflows/workflows-worker.module').WorkflowsWorkerModule]
     : [AppModule];
-  const moduleRef = await Test.createTestingModule({ imports }).compile();
+  const builder = Test.createTestingModule({ imports });
+  for (const [token, value] of opts.overrides ?? [])
+    builder.overrideProvider(token as never).useValue(value);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   setupApp(app);
   await app.init();

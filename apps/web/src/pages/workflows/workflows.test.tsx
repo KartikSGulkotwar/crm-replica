@@ -188,6 +188,53 @@ describe('Workflows UI', () => {
     );
   });
 
+  it('adds an AI step that classifies into a select field', async () => {
+    const saved: unknown[] = [];
+    mockApi({
+      ...base(),
+      'GET /workflows/w1': { body: workflow() },
+      'PUT /workflows/w1/draft': (init) => {
+        const body = JSON.parse(String(init?.body));
+        saved.push(body.definition);
+        return {
+          body: {
+            workflow: workflow({ draftVersion: version(1, 'DRAFT', body.definition) }),
+            problems: [],
+          },
+        };
+      },
+    });
+    renderApp(<App />, { route: '/workflows/w1' });
+    await userEvent.click(await screen.findByRole('button', { name: 'Add step' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /Ask AI/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Ask AI/, expanded: false }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Instructions' }),
+      'Is this deal likely to close?',
+    );
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Save the answer to' }),
+      'opportunity',
+    );
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Field' }), 'stage');
+    expect(screen.getByText(/Leave empty to choose from Stage’s options/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(saved[0]).toEqual({
+        trigger: { type: 'MANUAL' },
+        steps: [
+          {
+            id: 'ai',
+            name: 'Ask AI',
+            type: 'AI',
+            prompt: 'Is this deal likely to close?',
+            output: { object: 'opportunity', recordId: '{{trigger.record.id}}', field: 'stage' },
+          },
+        ],
+      }),
+    );
+  });
+
   it('shows what blocks publishing', async () => {
     mockApi({
       ...base(),

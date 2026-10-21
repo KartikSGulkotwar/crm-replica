@@ -1,5 +1,6 @@
 import {
   collectVariables,
+  FieldType,
   StepType,
   TriggerType,
   WorkflowDefinition,
@@ -93,6 +94,23 @@ export function validateWorkflow(definition: WorkflowDefinition, model: Workspac
               );
             }
           }
+        }
+      }
+      if (step.type === StepType.AI && step.output) {
+        const object = findObject(step.output.object);
+        const field = object?.fields.find((f) => f.name === step.output!.field && !f.system);
+        if (!object) problems.push(`${step.name}: object "${step.output.object}" doesn’t exist`);
+        else if (!field || (field.type !== FieldType.TEXT && field.type !== FieldType.SELECT))
+          problems.push(
+            `${step.name}: ${object.labelSingular} has no text or select field "${step.output.field}"`,
+          );
+        else if (field.type === FieldType.SELECT) {
+          const values = (field.options ?? []).map((o) => o.value);
+          const unknown = (step.choices ?? []).filter((c) => !values.includes(c));
+          if (unknown.length)
+            problems.push(
+              `${step.name}: ${field.label} has no option ${unknown.map((c) => `"${c}"`).join(', ')}`,
+            );
         }
       }
       checkVariables(step, { ...step, id: undefined, name: undefined }, available);

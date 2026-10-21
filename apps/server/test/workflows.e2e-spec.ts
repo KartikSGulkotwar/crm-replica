@@ -4,6 +4,8 @@ import { Queue } from 'bullmq';
 import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import request from 'supertest';
+import { LlmClient } from '../src/llm/llm-client';
+import { FakeLlm, message, text } from './utils/fake-llm';
 import { createTestApp, signupAgent, TestApp, uniqueEmail } from './utils/test-app';
 
 type Agent = ReturnType<typeof request.agent>;
@@ -13,6 +15,7 @@ describe('Workflows (e2e, with a real queue and worker)', () => {
   let t: TestApp;
   let admin: Agent;
   let acmeId: string;
+  const llm = new FakeLlm();
 
   // A tiny webhook receiver: fails the first `failures` calls with 500, then answers 200.
   let hook: Server;
@@ -69,7 +72,7 @@ describe('Workflows (e2e, with a real queue and worker)', () => {
     await new Promise<void>((r) => hook.listen(0, '127.0.0.1', r));
     hookUrl = `http://127.0.0.1:${(hook.address() as AddressInfo).port}/hook`;
 
-    t = await createTestApp({ withWorker: true });
+    t = await createTestApp({ withWorker: true, overrides: [[LlmClient, llm]] });
     admin = (await signupAgent(t, { workspaceName: 'Flows Co' })).agent;
     acmeId = (await create('companies', { name: 'Acme' })).id;
   });
@@ -504,5 +507,143 @@ describe('Workflows (e2e, with a real queue and worker)', () => {
     await other.agent.post(`/api/workflows/${wf.id}/run`).send({ recordId: acmeId }).expect(404);
     await other.agent.get(`/api/workflow-runs/${run.id}`).expect(404);
     expect((await other.agent.get('/api/workflows').expect(200)).body).toEqual([]);
+  });
+
+  describe('AI step', () => {
+    beforeEach(() => llm.reset());
+    const answer = (value: string) => message([text(JSON.stringify({ answer: value }))]);
+    const runOn = async (workflowId: string, recordId: string) => {
+      await admin.post(`/api/workflows/${workflowId}/run`).send({ recordId }).expect(202);
+      const [run] = await waitForRuns(workflowId, (runs) => runs.length > 0 && finished(runs[0]));
+      return run;
+    };
+
+    it('classifies a record into a select field’s options and saves the answer', async () => {
+      const company = await create('companies', { name: 'Ledgerly', domain: 'ledgerly.io' });
+      const wf = await publish('Classify industry', {
+        trigger: { type: 'MANUAL', object: 'company' },
+        steps: [
+          {
+            id: 'classify',
+            name: 'Classify industry',
+            type: 'AI',
+            prompt: 'Which industry is {{trigger.record.name}} ({{trigger.record.domain}}) in?',
+            output: { object: 'company', recordId: '{{trigger.record.id}}', field: 'industry' },
+          },
+          {
+            id: 'mail',
+            name: 'Email',
+            type: 'SEND_EMAIL',
+            to: 'sales@example.com',
+            subject: 'Industry: {{steps.classify.result.answer}}',
+          },
+        ],
+      });
+      llm.script(answer('FINANCE'));
+      const run = await runOn(wf.id, company.id);
+      expect(run.status).toBe('SUCCEEDED');
+      expect(run.steps[0].output).toEqual({ answer: 'FINANCE', recordId: company.id });
+      expect(run.steps[1].output).toMatchObject({ subject: 'Industry: FINANCE' });
+      expect(
+        (await admin.get(`/api/objects/companies/${company.id}`).expect(200)).body.industry,
+      ).toBe('FINANCE');
+
+      // What the model was asked: the filled-in prompt, constrained to the field's options.
+      const [call] = llm.calls;
+      expect(call.messages[0].content).toContain('Which industry is Ledgerly (ledgerly.io) in?');
+      const format = call.output_config?.format as unknown as {
+        schema: { properties: { answer: unknown } };
+      };
+      expect(format.schema.properties.answer).toEqual({
+        type: 'string',
+        enum: [
+          'SOFTWARE',
+          'FINANCE',
+          'HEALTHCARE',
+          'RETAIL',
+          'MANUFACTURING',
+          'EDUCATION',
+          'OTHER',
+        ],
+      });
+    });
+
+    it('summarises into a text field, retrying an answer that isn’t a valid choice', async () => {
+      const task = (await admin.post('/api/objects/tasks').send({ title: 'Call Acme' }).expect(201))
+        .body;
+      const wf = await publish('Summarise task', {
+        trigger: { type: 'MANUAL', object: 'task' },
+        steps: [
+          {
+            id: 'sum',
+            name: 'Summarise',
+            type: 'AI',
+            prompt: 'Write one line for: {{trigger.record.title}}',
+            choices: ['Short', 'Long'],
+            output: { object: 'task', recordId: '{{trigger.record.id}}', field: 'body' },
+          },
+        ],
+      });
+      llm.script(answer('Medium'), answer('Short'));
+      const run = await runOn(wf.id, task.id);
+      expect(run.status).toBe('SUCCEEDED');
+      expect(run.steps[0].attempts).toBe(2);
+      expect((await admin.get(`/api/objects/tasks/${task.id}`).expect(200)).body.body).toBe(
+        'Short',
+      );
+    });
+
+    it('fails without retrying when AI isn’t set up or the model declines', async () => {
+      const wf = await publish('AI without key', {
+        trigger: { type: 'MANUAL', object: 'company' },
+        steps: [{ id: 'ai', name: 'Ask', type: 'AI', prompt: 'Describe {{trigger.record.name}}' }],
+      });
+      llm.configured = false;
+      let run = await runOn(wf.id, acmeId);
+      expect(run.status).toBe('FAILED');
+      expect(run.steps[0]).toMatchObject({ status: 'FAILED', attempts: 1 });
+      expect(run.error).toMatch(/ANTHROPIC_API_KEY/);
+      expect(llm.calls).toHaveLength(0);
+
+      llm.configured = true;
+      llm.script(message([], 'refusal'));
+      await admin.post(`/api/workflows/${wf.id}/run`).send({ recordId: acmeId }).expect(202);
+      const runs = await waitForRuns(wf.id, (r) => r.length === 2 && finished(r[0]));
+      run = runs[0];
+      expect(run.status).toBe('FAILED');
+      expect(run.error).toMatch(/declined/);
+      expect(llm.calls).toHaveLength(1);
+    });
+
+    it('validates the output field and choices against the data model', async () => {
+      const wf = (await admin.post('/api/workflows').send({ name: 'Bad AI' }).expect(201)).body;
+      const step = (id: string, output: object, choices?: string[]) => ({
+        id,
+        name: `AI ${id}`,
+        type: 'AI',
+        prompt: 'x',
+        ...(choices ? { choices } : {}),
+        output: { recordId: '{{trigger.record.id}}', ...output },
+      });
+      const saved = await admin
+        .put(`/api/workflows/${wf.id}/draft`)
+        .send({
+          definition: {
+            trigger: { type: 'MANUAL', object: 'company' },
+            steps: [
+              step('a', { object: 'unicorn', field: 'x' }),
+              step('b', { object: 'company', field: 'employees' }),
+              step('c', { object: 'company', field: 'industry' }, ['FINANCE', 'SPACE']),
+              step('d', { object: 'company', field: 'industry' }, ['FINANCE', 'RETAIL']),
+            ],
+          },
+        })
+        .expect(200);
+      expect(saved.body.problems).toEqual([
+        'AI a: object "unicorn" doesn’t exist',
+        'AI b: Company has no text or select field "employees"',
+        'AI c: Industry has no option "SPACE"',
+      ]);
+    });
   });
 });

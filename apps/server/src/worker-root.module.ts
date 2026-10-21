@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { loadEnv } from './config/env';
 import { databaseModule } from './database/database.module';
+import { LlmModule } from './llm/llm.module';
 import { redisOptionsFromUrl } from './redis/redis-connection';
 import { WorkflowsWorkerModule } from './workflows/workflows-worker.module';
 
@@ -20,6 +21,7 @@ const env = loadEnv();
       connection: redisOptionsFromUrl(env.REDIS_URL),
       prefix: env.BULLMQ_PREFIX,
     }),
+    LlmModule,
     WorkflowsWorkerModule,
   ],
 })

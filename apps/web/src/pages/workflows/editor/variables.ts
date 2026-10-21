@@ -67,6 +67,8 @@ function stepVariables(step: WorkflowStep, objects: ObjectMetadataDto[]): Variab
       };
     case StepType.SEND_EMAIL:
       return { label: step.name, variables: [{ path: `${prefix}.delivered`, label: 'Delivered' }] };
+    case StepType.AI:
+      return { label: step.name, variables: [{ path: `${prefix}.answer`, label: 'AI answer' }] };
     case StepType.IF_ELSE:
       return {
         label: step.name,

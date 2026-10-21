@@ -3,6 +3,7 @@ import { Metadata1760800000000 } from './1760800000000-Metadata';
 import { Views1760900000000 } from './1760900000000-Views';
 import { AppsAndApiKeys1761000000000 } from './1761000000000-AppsAndApiKeys';
 import { Workflows1761100000000 } from './1761100000000-Workflows';
+import { AgentConversations1761200000000 } from './1761200000000-AgentConversations';
 
 /** Listed explicitly (not globbed) so the same list works from ts-jest, nest build and Docker. */
 export const MIGRATIONS = [
@@ -11,4 +12,5 @@ export const MIGRATIONS = [
   Views1760900000000,
   AppsAndApiKeys1761000000000,
   Workflows1761100000000,
+  AgentConversations1761200000000,
 ];

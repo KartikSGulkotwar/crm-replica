@@ -135,6 +135,18 @@ describe('workflowDefinitionSchema', () => {
     ],
   };
 
+  it('accepts an AI step that classifies and saves its answer', () => {
+    const step = {
+      id: 'classify',
+      name: 'Classify',
+      type: StepType.AI,
+      prompt: 'Is {{trigger.record.name}} a big deal?',
+      choices: ['Yes', 'No'],
+      output: { object: 'opportunity', recordId: '{{trigger.record.id}}', field: 'name' },
+    };
+    expect(workflowDefinitionSchema.parse({ ...won, steps: [step] }).steps[0]).toEqual(step);
+  });
+
   it('accepts a valid workflow and fills defaults', () => {
     const parsed = workflowDefinitionSchema.parse(won);
     expect(flattenSteps(parsed.steps).map((s) => s.id)).toEqual([
@@ -152,6 +164,29 @@ describe('workflowDefinitionSchema', () => {
     [{ ...won, trigger: { type: TriggerType.SCHEDULE, cron: 'every day' } }, 'cron expression'],
     [{ ...won, trigger: { type: 'WHENEVER' } }, 'trigger'],
     [{ ...won, steps: [{ id: 'x', name: 'X', type: StepType.DELAY, seconds: 0 }] }, 'seconds'],
+    [{ ...won, steps: [{ id: 'x', name: 'X', type: StepType.AI, prompt: '' }] }, 'prompt'],
+    [
+      {
+        ...won,
+        steps: [{ id: 'x', name: 'X', type: StepType.AI, prompt: 'p', choices: ['Only'] }],
+      },
+      'choices',
+    ],
+    [
+      {
+        ...won,
+        steps: [
+          {
+            id: 'x',
+            name: 'X',
+            type: StepType.AI,
+            prompt: 'p',
+            output: { object: 'task', field: 'body' },
+          },
+        ],
+      },
+      'output.recordId',
+    ],
     [
       {
         ...won,
