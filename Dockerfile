@@ -1,6 +1,6 @@
-# One image, two start commands (see docker-compose.yml / Railway):
+# One image, two processes (see docker-compose.yml / docs/deploy-railway.md):
 #   API + web app:  node apps/server/dist/main.js   (default)
-#   Worker:         node apps/worker/dist/main.js
+#   Worker:         node apps/worker/dist/main.js   (or set APP_ROLE=worker)
 FROM node:24-alpine AS base
 RUN npm install -g pnpm@11.5.3
 # Non-interactive pnpm (no TTY prompts during docker build).
@@ -30,4 +30,6 @@ COPY --from=build --chown=node:node /app/apps/worker/dist apps/worker/dist
 COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
 USER node
 EXPOSE 3000
-CMD ["node", "apps/server/dist/main.js"]
+# APP_ROLE=worker starts the worker instead, so a host can run both services from this image
+# by setting one variable (no custom start command needed).
+CMD ["sh", "-c", "if [ \"$APP_ROLE\" = worker ]; then exec node apps/worker/dist/main.js; else exec node apps/server/dist/main.js; fi"]

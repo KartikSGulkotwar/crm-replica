@@ -10,6 +10,11 @@ const envSchema = z.object({
   /** Namespace for BullMQ keys in Redis; tests use a unique one to stay isolated. */
   BULLMQ_PREFIX: z.string().min(1).default('crm'),
   APP_URL: z.string().url().default('http://localhost:5173'),
+  /**
+   * Proxies in front of the API whose X-Forwarded-For entries to trust (for client IPs in rate
+   * limits). 1 = one load balancer (Railway); 2 = a CDN in front of it (Vercel → Railway).
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   JWT_SECRET: z.string().optional(),
   /** First retry delay for failed workflow steps (doubles each attempt). */
   WORKFLOW_RETRY_DELAY_MS: z.coerce.number().int().min(0).default(2000),

@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { loadEnv } from './config/env';
 import { setBaseOpenApiDocument } from './records/openapi.controller';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
@@ -9,8 +10,9 @@ export function setupApp(app: INestApplication) {
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
   app.use(cookieParser());
-  // Behind Railway's proxy: use the client's IP (X-Forwarded-For) for rate limiting.
-  (app as NestExpressApplication).set('trust proxy', 1);
+  // Behind proxies (Railway, or Vercel → Railway): use the client's IP from X-Forwarded-For
+  // for rate limiting.
+  (app as NestExpressApplication).set('trust proxy', loadEnv().TRUST_PROXY_HOPS);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
