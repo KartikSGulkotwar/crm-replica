@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npx --yes pnpm@11.5.3 install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@11.5.3 --filter @crm-replica/web build",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/offline" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -11,8 +11,9 @@ export function RequireAuth() {
   if (session.isError) {
     return (
       <div className="grid h-full place-items-center p-4 text-center">
-        <div>
-          <p className="text-sm text-bad">Can’t reach the server: {session.error.message}</p>
+        <div className="max-w-sm">
+          <p className="font-medium">Can’t reach the server</p>
+          <p className="mt-1 text-sm text-muted">{session.error.message}</p>
           <Button variant="secondary" className="mt-3" onClick={() => session.refetch()}>
             Try again
           </Button>
